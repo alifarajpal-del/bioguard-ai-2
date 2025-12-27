@@ -1,0 +1,2671 @@
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         BioGuard AI - Smart Health Guardian                  ║
+║══════════════════════════════════════════════════════════════════════════════║
+║  Developed by: Ali Riyad Faraj                                               ║
+║  Location: Palestine 🇵🇸                                                      ║
+║  Version: 2.0.0 (Medical Ecosystem Edition)                                  ║
+║  Copyright © 2024-2025 Ali Riyad Faraj. All Rights Reserved.                 ║
+║                                                                              ║
+║  Description:                                                                ║
+║  An intelligent system for food and medical analysis, built by Palestinian   ║
+║  hands to empower community health awareness. Features include AI-powered    ║
+║  food scanning, medical file vault, health dashboard, and personalized       ║
+║  nutrition advice based on user medical profiles.                            ║
+║                                                                              ║
+║  نظام ذكي لتحليل المنتجات الغذائية والتقارير الطبية، صُمم بأيدي فلسطينية      ║
+║  لتعزيز الوعي الصحي المجتمعي.                                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
+__author__ = "Ali Riyad Faraj"
+__copyright__ = "Copyright 2024-2025, Ali Riyad Faraj"
+__license__ = "All Rights Reserved"
+__version__ = "2.0.0"
+__maintainer__ = "Ali Riyad Faraj"
+__email__ = "contact@bioguard.ps"
+__status__ = "Production"
+__location__ = "Palestine 🇵🇸"
+
+import base64
+import concurrent.futures
+import io
+import json
+import os
+import re
+import sqlite3
+import hashlib
+from datetime import datetime
+from typing import Any, Dict, Optional, List
+from pathlib import Path
+
+from dotenv import load_dotenv
+from openai import OpenAI
+from PIL import Image
+import streamlit as st
+import plotly.graph_objects as go
+
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
+# Load environment variables from .env file
+load_dotenv()
+
+# --- DATABASE SETUP ---
+DB_PATH = Path(__file__).parent / "bioguard.db"
+
+def init_database():
+    """Initialize SQLite database with required tables"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS medical_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE,
+            age INTEGER,
+            gender TEXT,
+            weight REAL,
+            height REAL,
+            allergies TEXT,
+            conditions TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS analysis_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            product_name TEXT,
+            health_score INTEGER,
+            nova_score INTEGER,
+            verdict TEXT,
+            macros TEXT,
+            clinical_verdict TEXT,
+            warnings TEXT,
+            bio_alternative TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS medical_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            file_name TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_category TEXT,
+            file_data BLOB,
+            ai_summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def db_register_user(username: str, email: str, password: str) -> Optional[int]:
+    """Register new user, returns user_id or None if exists"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            (username, email, hash_password(password))
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        conn.close()
+        return user_id
+    except sqlite3.IntegrityError:
+        conn.close()
+        return None
+
+def db_login_user(username: str, password: str) -> Optional[Dict]:
+    """Verify login, returns user data or None"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, email FROM users WHERE username = ? AND password_hash = ?",
+        (username, hash_password(password))
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"id": row[0], "username": row[1], "email": row[2]}
+    return None
+
+def db_save_medical_profile(user_id: int, profile: Dict):
+    """Save or update medical profile"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO medical_profiles 
+        (user_id, age, gender, weight, height, allergies, conditions, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        user_id, profile.get('age'), profile.get('gender'),
+        profile.get('weight'), profile.get('height'),
+        profile.get('allergies', ''), profile.get('conditions', ''),
+        datetime.now()
+    ))
+    conn.commit()
+    conn.close()
+
+def db_get_medical_profile(user_id: int) -> Optional[Dict]:
+    """Get medical profile for user"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT age, gender, weight, height, allergies, conditions FROM medical_profiles WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "age": row[0], "gender": row[1], "weight": row[2],
+            "height": row[3], "allergies": row[4], "conditions": row[5]
+        }
+    return None
+
+def db_save_analysis(user_id: int, result: Dict):
+    """Save analysis result to history"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO analysis_history 
+        (user_id, product_name, health_score, nova_score, verdict, macros, clinical_verdict, warnings, bio_alternative)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        user_id,
+        result.get('name', 'Unknown'),
+        result.get('health_score', 0),
+        result.get('nova_score', 0),
+        result.get('verdict', 'WARNING'),
+        json.dumps(result.get('macros', {})),
+        result.get('clinical_verdict', ''),
+        json.dumps(result.get('warnings', [])),
+        result.get('bio_alternative', '')
+    ))
+    conn.commit()
+    conn.close()
+
+def db_get_history(user_id: int, limit: int = 20) -> list:
+    """Get analysis history for user"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT product_name, health_score, nova_score, verdict, macros, 
+               clinical_verdict, warnings, bio_alternative, created_at
+        FROM analysis_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
+    ''', (user_id, limit))
+    rows = cursor.fetchall()
+    conn.close()
+    history = []
+    for row in rows:
+        history.append({
+            "name": row[0],
+            "health_score": row[1],
+            "nova_score": row[2],
+            "verdict": row[3],
+            "macros": json.loads(row[4]) if row[4] else {},
+            "clinical_verdict": row[5],
+            "warnings": json.loads(row[6]) if row[6] else [],
+            "bio_alternative": row[7],
+            "created_at": row[8]
+        })
+    return history
+
+def db_save_medical_file(user_id: int, file_name: str, file_type: str, file_category: str, file_data: bytes, ai_summary: str = "") -> int:
+    """Save medical file to database"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO medical_files (user_id, file_name, file_type, file_category, file_data, ai_summary)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, file_name, file_type, file_category, file_data, ai_summary))
+    conn.commit()
+    file_id = cursor.lastrowid
+    conn.close()
+    return file_id
+
+def db_get_medical_files(user_id: int) -> list:
+    """Get all medical files for user (without file data for performance)"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, file_name, file_type, file_category, ai_summary, created_at
+        FROM medical_files WHERE user_id = ? ORDER BY created_at DESC
+    ''', (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "file_name": r[1], "file_type": r[2], "file_category": r[3], 
+             "ai_summary": r[4], "created_at": r[5]} for r in rows]
+
+def db_get_medical_file_data(file_id: int) -> Optional[bytes]:
+    """Get file data for a specific medical file"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_data FROM medical_files WHERE id = ?", (file_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def db_delete_medical_file(file_id: int):
+    """Delete a medical file"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM medical_files WHERE id = ?", (file_id,))
+    conn.commit()
+    conn.close()
+
+def db_update_file_summary(file_id: int, summary: str):
+    """Update AI summary for a medical file"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute("UPDATE medical_files SET ai_summary = ? WHERE id = ?", (summary, file_id))
+    conn.commit()
+    conn.close()
+
+def db_get_user_files_summary(user_id: int) -> str:
+    """Get combined AI summaries of all user medical files for chat context"""
+    conn = sqlite3.connect(str(DB_PATH))
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT file_name, file_category, ai_summary FROM medical_files 
+        WHERE user_id = ? AND ai_summary IS NOT NULL AND ai_summary != ''
+    ''', (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    if not rows:
+        return ""
+    summary = "User's Medical Files Summary:\n"
+    for r in rows:
+        summary += f"- {r[0]} ({r[1]}): {r[2]}\n"
+    return summary
+
+def get_nutrition_stats(history: list) -> Dict:
+    """Calculate nutrition statistics from history for dashboard"""
+    if not history:
+        return {"avg_score": 0, "total_scans": 0, "safe_count": 0, "warning_count": 0, "danger_count": 0,
+                "total_sugar": 0, "total_sodium": 0, "total_fats": 0}
+    
+    total_score = 0
+    safe_count = warning_count = danger_count = 0
+    total_sugar = total_sodium = total_fats = 0
+    
+    for item in history:
+        score = item.get("health_score", 50)
+        total_score += score
+        if score > 70:
+            safe_count += 1
+        elif score > 40:
+            warning_count += 1
+        else:
+            danger_count += 1
+        
+        macros = item.get("macros", {})
+        carbs_str = macros.get("carbs", "0g")
+        sodium_str = macros.get("sodium", "0mg")
+        fats_str = macros.get("fats", "0g")
+        
+        try:
+            total_sugar += float(re.sub(r'[^\d.]', '', carbs_str) or 0)
+            total_sodium += float(re.sub(r'[^\d.]', '', sodium_str) or 0)
+            total_fats += float(re.sub(r'[^\d.]', '', fats_str) or 0)
+        except:
+            pass
+    
+    return {
+        "avg_score": round(total_score / len(history)) if history else 0,
+        "total_scans": len(history),
+        "safe_count": safe_count,
+        "warning_count": warning_count,
+        "danger_count": danger_count,
+        "total_sugar": round(total_sugar, 1),
+        "total_sodium": round(total_sodium, 1),
+        "total_fats": round(total_fats, 1)
+    }
+
+# --- FHIR API PLACEHOLDER ---
+def fhir_sync_placeholder():
+    """Placeholder for future FHIR API integration"""
+    pass
+
+def external_medical_api_placeholder(endpoint: str, data: Dict) -> Dict:
+    """Placeholder for external medical API calls"""
+    return {"status": "not_implemented", "message": "External API integration coming soon"}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRODUCTION-GRADE AI ANALYSIS PIPELINE
+# BioGuard AI - Food Product Analysis Brain
+# Version: 2.0.0 | Author: Ali Riyad Faraj | Palestine 🇵🇸
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Strict JSON Schema for AI Output
+AI_OUTPUT_SCHEMA = {
+    "name": "string",
+    "health_score": "integer (0-100)",
+    "nova_score": "integer (1-4)",
+    "verdict": "SAFE | WARNING | DANGER",
+    "macros": {
+        "protein": "string (e.g., '5g')",
+        "carbs": "string (e.g., '10g')",
+        "fats": "string (e.g., '3g')",
+        "sodium": "string (e.g., '150mg')"
+    },
+    "ingredients": ["string array"],
+    "clinical_verdict": "string",
+    "warnings": ["string array"],
+    "bio_alternative": "string",
+    "confidence_level": "high | medium | low"
+}
+
+def build_analysis_prompt(language: str, medical_profile: Dict) -> str:
+    """
+    Build production-grade AI analysis prompt.
+    Returns a comprehensive, evidence-based prompt for food analysis.
+    """
+    
+    # Build medical context
+    medical_context = ""
+    if medical_profile:
+        age = medical_profile.get('age', '')
+        allergies = medical_profile.get('allergies', '').strip()
+        conditions = medical_profile.get('conditions', '').strip()
+        weight = medical_profile.get('weight', '')
+        height = medical_profile.get('height', '')
+        
+        if language == "ar":
+            medical_context = f"""
+═══════════════════════════════════════════════════════════════
+⚠️ ملف المستخدم الطبي (إلزامي المراعاة):
+- العمر: {age if age else 'غير محدد'}
+- الوزن: {weight if weight else 'غير محدد'} كجم
+- الطول: {height if height else 'غير محدد'} سم
+- الحساسية: {allergies if allergies else 'لا يوجد'}
+- الحالات الطبية: {conditions if conditions else 'لا يوجد'}
+
+⚠️ تعليمات إلزامية:
+- إذا كان أي مكون يتعارض مع حساسية المستخدم: أضفه في warnings مع علامة ⚠️
+- إذا كان المنتج غير مناسب لحالة طبية (مثل السكري): اذكر ذلك في clinical_verdict
+- خفض health_score بمقدار 20-40 نقطة إذا وُجد تعارض طبي
+═══════════════════════════════════════════════════════════════"""
+        elif language == "fr":
+            medical_context = f"""
+═══════════════════════════════════════════════════════════════
+⚠️ PROFIL MÉDICAL UTILISATEUR (Obligatoire à considérer):
+- Âge: {age if age else 'Non spécifié'}
+- Poids: {weight if weight else 'Non spécifié'} kg
+- Taille: {height if height else 'Non spécifié'} cm
+- Allergies: {allergies if allergies else 'Aucune'}
+- Conditions médicales: {conditions if conditions else 'Aucune'}
+
+⚠️ Instructions obligatoires:
+- Si un ingrédient entre en conflit avec les allergies: ajoutez-le aux warnings avec ⚠️
+- Si le produit ne convient pas à une condition médicale (ex: diabète): mentionnez-le dans clinical_verdict
+- Réduisez health_score de 20-40 points en cas de conflit médical
+═══════════════════════════════════════════════════════════════"""
+        else:
+            medical_context = f"""
+═══════════════════════════════════════════════════════════════
+⚠️ USER MEDICAL PROFILE (Mandatory to consider):
+- Age: {age if age else 'Not specified'}
+- Weight: {weight if weight else 'Not specified'} kg
+- Height: {height if height else 'Not specified'} cm
+- Allergies: {allergies if allergies else 'None'}
+- Medical Conditions: {conditions if conditions else 'None'}
+
+⚠️ Mandatory Instructions:
+- If ANY ingredient conflicts with user allergies: ADD to warnings with ⚠️ symbol
+- If product unsuitable for medical condition (e.g., diabetes): state in clinical_verdict
+- REDUCE health_score by 20-40 points if medical conflict exists
+═══════════════════════════════════════════════════════════════"""
+
+    # Language-specific prompts
+    if language == "ar":
+        prompt = f"""أنت نظام تحليل غذائي طبي متقدم. مهمتك تحليل صورة المنتج الغذائي بدقة علمية.
+
+═══════════════════════════════════════════════════════════════
+📋 المهام المطلوبة:
+═══════════════════════════════════════════════════════════════
+1. استخراج اسم المنتج من الصورة
+2. قراءة جدول القيم الغذائية بدقة (بروتين، كربوهيدرات، دهون، صوديوم)
+3. استخراج قائمة المكونات كاملة
+4. تحديد درجة NOVA للمعالجة (1-4):
+   - NOVA 1: أغذية طبيعية غير معالجة
+   - NOVA 2: مكونات طهي معالجة (زيوت، سكر، ملح)
+   - NOVA 3: أغذية معالجة (خضار معلبة، جبن)
+   - NOVA 4: منتجات فائقة المعالجة (وجبات سريعة، مشروبات غازية)
+
+5. حساب نقاط الصحة (0-100) بناءً على:
+   - محتوى السكر (كلما زاد، انخفضت النقاط)
+   - محتوى الصوديوم (> 600mg يخفض النقاط)
+   - الدهون المشبعة والمتحولة
+   - درجة NOVA (NOVA 4 = خصم 20-30 نقطة)
+   - وجود إضافات صناعية ومواد حافظة
+   - تعارض مع الملف الطبي للمستخدم
+
+6. تحديد الحكم بناءً على النقاط فقط:
+   - 71-100: SAFE (آمن)
+   - 41-70: WARNING (تحذير)
+   - 0-40: DANGER (خطر)
+
+7. كتابة تحليل سريري مفصل
+8. إضافة تحذيرات محددة
+9. اقتراح بديل صحي من نفس الفئة
+{medical_context}
+═══════════════════════════════════════════════════════════════
+📤 تنسيق الإخراج (JSON فقط - بدون أي نص إضافي):
+═══════════════════════════════════════════════════════════════
+{{
+  "name": "اسم المنتج",
+  "health_score": 0,
+  "nova_score": 1,
+  "verdict": "SAFE",
+  "macros": {{
+    "protein": "0g",
+    "carbs": "0g",
+    "fats": "0g",
+    "sodium": "0mg"
+  }},
+  "ingredients": ["مكون 1", "مكون 2"],
+  "clinical_verdict": "التحليل السريري المفصل هنا...",
+  "warnings": ["تحذير 1", "تحذير 2"],
+  "bio_alternative": "البديل الصحي المقترح",
+  "confidence_level": "high"
+}}
+
+═══════════════════════════════════════════════════════════════
+⚠️ قواعد صارمة:
+═══════════════════════════════════════════════════════════════
+- أخرج JSON فقط بدون أي نص أو شرح
+- لا تختلق قيم - إذا لم تستطع القراءة اكتب "unknown"
+- كن متحفظاً في التقييم (الأمان أولاً)
+- إذا كانت جودة الصورة سيئة: confidence_level = "low"
+- هذه أداة توعوية وليست تشخيصاً طبياً
+- الحكم يُحدد من النقاط فقط (71+ آمن، 41-70 تحذير، 0-40 خطر)
+"""
+
+    elif language == "fr":
+        prompt = f"""Vous êtes un système d'analyse nutritionnelle médicale avancé. Votre tâche est d'analyser l'image du produit alimentaire avec précision scientifique.
+
+═══════════════════════════════════════════════════════════════
+📋 TÂCHES REQUISES:
+═══════════════════════════════════════════════════════════════
+1. Extraire le nom du produit de l'image
+2. Lire le tableau nutritionnel avec précision (protéines, glucides, lipides, sodium)
+3. Extraire la liste complète des ingrédients
+4. Déterminer le score NOVA (1-4):
+   - NOVA 1: Aliments naturels non transformés
+   - NOVA 2: Ingrédients culinaires (huiles, sucre, sel)
+   - NOVA 3: Aliments transformés (légumes en conserve, fromage)
+   - NOVA 4: Produits ultra-transformés (fast-food, sodas)
+
+5. Calculer le score santé (0-100) basé sur:
+   - Teneur en sucre (plus élevé = score plus bas)
+   - Teneur en sodium (> 600mg réduit le score)
+   - Graisses saturées et trans
+   - Score NOVA (NOVA 4 = -20-30 points)
+   - Présence d'additifs artificiels
+   - Conflit avec le profil médical
+
+6. Déterminer le verdict UNIQUEMENT selon le score:
+   - 71-100: SAFE (Sûr)
+   - 41-70: WARNING (Attention)
+   - 0-40: DANGER (Danger)
+
+7. Rédiger une analyse clinique détaillée
+8. Ajouter des avertissements spécifiques
+9. Suggérer une alternative plus saine
+{medical_context}
+═══════════════════════════════════════════════════════════════
+📤 FORMAT DE SORTIE (JSON uniquement - aucun texte supplémentaire):
+═══════════════════════════════════════════════════════════════
+{{
+  "name": "Nom du produit",
+  "health_score": 0,
+  "nova_score": 1,
+  "verdict": "SAFE",
+  "macros": {{
+    "protein": "0g",
+    "carbs": "0g",
+    "fats": "0g",
+    "sodium": "0mg"
+  }},
+  "ingredients": ["ingrédient 1", "ingrédient 2"],
+  "clinical_verdict": "Analyse clinique détaillée ici...",
+  "warnings": ["avertissement 1", "avertissement 2"],
+  "bio_alternative": "Alternative saine suggérée",
+  "confidence_level": "high"
+}}
+
+═══════════════════════════════════════════════════════════════
+⚠️ RÈGLES STRICTES:
+═══════════════════════════════════════════════════════════════
+- Sortie JSON UNIQUEMENT sans texte ni explication
+- Ne pas inventer de valeurs - écrire "unknown" si illisible
+- Être conservateur dans l'évaluation (sécurité d'abord)
+- Si qualité d'image mauvaise: confidence_level = "low"
+- Ceci est un outil de sensibilisation, PAS un diagnostic médical
+- Le verdict est déterminé UNIQUEMENT par le score (71+ sûr, 41-70 attention, 0-40 danger)
+"""
+
+    else:  # English (default)
+        prompt = f"""You are an advanced medical nutrition analysis system. Your task is to analyze the food product image with scientific precision.
+
+═══════════════════════════════════════════════════════════════
+📋 REQUIRED TASKS:
+═══════════════════════════════════════════════════════════════
+1. Extract product name from image
+2. Read nutrition facts table accurately (protein, carbs, fats, sodium)
+3. Extract complete ingredients list
+4. Determine NOVA processing score (1-4):
+   - NOVA 1: Unprocessed/minimally processed foods (fruits, vegetables, meat, eggs)
+   - NOVA 2: Processed culinary ingredients (oils, butter, sugar, salt)
+   - NOVA 3: Processed foods (canned vegetables, cheese, cured meat)
+   - NOVA 4: Ultra-processed products (soft drinks, chips, instant noodles, fast food)
+
+5. Calculate health score (0-100) based on:
+   - Sugar content (higher = lower score, >25g per serving = -20 points)
+   - Sodium content (>600mg = -15 points, >1000mg = -25 points)
+   - Saturated and trans fats (>5g sat fat = -15 points)
+   - NOVA score (NOVA 4 = -20 to -30 points)
+   - Artificial additives, preservatives, colorings (-5 to -15 points)
+   - Conflict with user medical profile (-20 to -40 points)
+   - Fiber and protein content (positive factors)
+
+6. Determine verdict STRICTLY from score:
+   - 71-100: SAFE ✓
+   - 41-70: WARNING ⚡
+   - 0-40: DANGER ⚠
+
+7. Write detailed clinical verdict explaining health implications
+8. Add specific warnings (allergens, high sodium, sugar concerns)
+9. Suggest healthier alternative from same product category
+{medical_context}
+═══════════════════════════════════════════════════════════════
+📤 OUTPUT FORMAT (JSON ONLY - NO additional text):
+═══════════════════════════════════════════════════════════════
+{{
+  "name": "Product Name",
+  "health_score": 0,
+  "nova_score": 1,
+  "verdict": "SAFE",
+  "macros": {{
+    "protein": "0g",
+    "carbs": "0g",
+    "fats": "0g",
+    "sodium": "0mg"
+  }},
+  "ingredients": ["ingredient 1", "ingredient 2"],
+  "clinical_verdict": "Detailed clinical analysis here...",
+  "warnings": ["warning 1", "warning 2"],
+  "bio_alternative": "Suggested healthy alternative",
+  "confidence_level": "high"
+}}
+
+═══════════════════════════════════════════════════════════════
+⚠️ STRICT RULES (MUST FOLLOW):
+═══════════════════════════════════════════════════════════════
+1. Output ONLY valid JSON - NO markdown, NO explanations, NO extra text
+2. Do NOT hallucinate values - write "unknown" if unreadable
+3. Be CONSERVATIVE in scoring (safety first approach)
+4. If image quality is poor: set confidence_level = "low"
+5. This is an AWARENESS tool, NOT medical diagnosis
+6. Verdict is determined ONLY by score (71+ SAFE, 41-70 WARNING, 0-40 DANGER)
+7. All string fields must have values (use "unknown" or "N/A" if needed)
+8. warnings array can be empty [] if no concerns
+9. ingredients array must contain at least ["unknown"] if unreadable
+10. health_score must be integer between 0-100
+11. nova_score must be integer between 1-4
+12. verdict must be exactly "SAFE", "WARNING", or "DANGER"
+"""
+
+    return prompt
+
+def validate_ai_response(response: Dict) -> Dict:
+    """
+    Validate and sanitize AI response to ensure schema compliance.
+    Returns cleaned response with defaults for missing fields.
+    """
+    # Default structure
+    validated = {
+        "name": "Unknown Product",
+        "health_score": 50,
+        "nova_score": 3,
+        "verdict": "WARNING",
+        "macros": {
+            "protein": "unknown",
+            "carbs": "unknown",
+            "fats": "unknown",
+            "sodium": "unknown"
+        },
+        "ingredients": ["unknown"],
+        "clinical_verdict": "Analysis could not be completed fully.",
+        "warnings": [],
+        "bio_alternative": "N/A",
+        "confidence_level": "low"
+    }
+    
+    # Copy valid fields from response
+    if isinstance(response.get("name"), str) and response["name"]:
+        validated["name"] = response["name"]
+    
+    # Validate health_score (0-100)
+    try:
+        score = int(response.get("health_score", 50))
+        validated["health_score"] = max(0, min(100, score))
+    except (ValueError, TypeError):
+        validated["health_score"] = 50
+    
+    # Validate nova_score (1-4)
+    try:
+        nova = int(response.get("nova_score", 3))
+        validated["nova_score"] = max(1, min(4, nova))
+    except (ValueError, TypeError):
+        validated["nova_score"] = 3
+    
+    # Enforce verdict from score (strict rule)
+    score = validated["health_score"]
+    if score >= 71:
+        validated["verdict"] = "SAFE"
+    elif score >= 41:
+        validated["verdict"] = "WARNING"
+    else:
+        validated["verdict"] = "DANGER"
+    
+    # Validate macros
+    if isinstance(response.get("macros"), dict):
+        for key in ["protein", "carbs", "fats", "sodium"]:
+            if isinstance(response["macros"].get(key), str):
+                validated["macros"][key] = response["macros"][key]
+    
+    # Validate ingredients
+    if isinstance(response.get("ingredients"), list) and len(response["ingredients"]) > 0:
+        validated["ingredients"] = [str(i) for i in response["ingredients"] if i]
+        if not validated["ingredients"]:
+            validated["ingredients"] = ["unknown"]
+    
+    # Validate clinical_verdict
+    if isinstance(response.get("clinical_verdict"), str) and response["clinical_verdict"]:
+        validated["clinical_verdict"] = response["clinical_verdict"]
+    
+    # Validate warnings
+    if isinstance(response.get("warnings"), list):
+        validated["warnings"] = [str(w) for w in response["warnings"] if w]
+    
+    # Validate bio_alternative
+    if isinstance(response.get("bio_alternative"), str) and response["bio_alternative"]:
+        validated["bio_alternative"] = response["bio_alternative"]
+    
+    # Validate confidence_level
+    if response.get("confidence_level") in ["high", "medium", "low"]:
+        validated["confidence_level"] = response["confidence_level"]
+    
+    return validated
+
+def analyze_food_product(client, image: Image.Image, language: str, medical_profile: Dict) -> Dict:
+    """
+    Main AI analysis function for food products.
+    Returns validated JSON response.
+    """
+    # Build comprehensive prompt
+    prompt = build_analysis_prompt(language, medical_profile)
+    
+    # Call AI with vision
+    response_text = call_openai_vision(client, prompt, image)
+    
+    # Clean and parse JSON
+    clean_response = clean_json_text(response_text)
+    
+    try:
+        raw_result = json.loads(clean_response)
+    except json.JSONDecodeError:
+        # Return minimal valid response on parse failure
+        return {
+            "name": "Parse Error",
+            "health_score": 50,
+            "nova_score": 3,
+            "verdict": "WARNING",
+            "macros": {"protein": "unknown", "carbs": "unknown", "fats": "unknown", "sodium": "unknown"},
+            "ingredients": ["unknown"],
+            "clinical_verdict": "Could not parse AI response. Please try again with a clearer image.",
+            "warnings": ["Analysis incomplete due to parsing error"],
+            "bio_alternative": "N/A",
+            "confidence_level": "low",
+            "_raw_response": response_text  # For debugging
+        }
+    
+    # Validate and return
+    return validate_ai_response(raw_result)
+
+# Initialize database on startup
+init_database()
+
+# --- TRANSLATIONS ---
+TRANSLATIONS = {
+    "en": {
+        "app_title": "BioGuard AI",
+        "app_subtitle": "Your Smart Health Guardian",
+        "change_theme": "🔄 Change Theme",
+        "scan_product": "Scan Your Food Product",
+        "upload_hint": "Upload barcode or ingredients label image",
+        "choose_image": "Choose an image",
+        "analyze_btn": "🔍 Analyze Product",
+        "api_missing": "⚠️ API key not found. Please add OPENAI_API_KEY",
+        "analyzing": "Analyzing...",
+        "analysis_failed": "Analysis failed. Please ensure image is clear and try again.",
+        "health_score": "Health Score",
+        "safe": "SAFE ✓",
+        "warning": "WARNING ⚡",
+        "danger": "DANGER ⚠",
+        "protein": "Protein",
+        "carbs": "Carbohydrates",
+        "fats": "Fats",
+        "sodium": "Sodium",
+        "clinical_analysis": "🩺 Clinical Analysis",
+        "healthy_alternative": "✨ Healthy Alternative",
+        "history": "📋 History",
+        "no_history": "No previous analyses",
+        "about": "About",
+        "about_desc": "An intelligent system for analyzing food products using AI. Helps you make better health decisions by analyzing ingredients and nutritional values.",
+        "features": "✨ Features",
+        "features_list": "• Instant food product analysis<br>• Comprehensive health score (0-100)<br>• NOVA classification for processed foods<br>• Healthy alternatives suggestions<br>• Previous analyses history",
+        "disclaimer": "⚠️ Disclaimer",
+        "disclaimer_text": "This app is for health awareness only and is not a substitute for professional medical advice.",
+        "nav_scan": "📸 Scan",
+        "nav_history": "📋 History",
+        "nav_about": "ℹ️ About",
+        "nav_chat": "💬 Chat",
+        "score_label": "Score",
+        "product": "Product",
+        "login": "Login",
+        "register": "Register",
+        "logout": "Logout",
+        "welcome": "Welcome",
+        "username": "Username",
+        "password": "Password",
+        "confirm_password": "Confirm Password",
+        "email": "Email",
+        "login_btn": "🔐 Login",
+        "register_btn": "📝 Register",
+        "no_account": "Don't have an account?",
+        "have_account": "Already have an account?",
+        "medical_history": "Medical History",
+        "medical_history_desc": "Please fill in your medical information for personalized analysis",
+        "age": "Age",
+        "gender": "Gender",
+        "male": "Male",
+        "female": "Female",
+        "weight": "Weight (kg)",
+        "height": "Height (cm)",
+        "allergies": "Allergies",
+        "allergies_hint": "e.g., peanuts, dairy, gluten",
+        "conditions": "Medical Conditions",
+        "conditions_hint": "e.g., diabetes, hypertension",
+        "save_profile": "💾 Save Profile",
+        "profile_saved": "Profile saved successfully!",
+        "chat_title": "🍎 Nutrition Chat",
+        "chat_subtitle": "Ask me anything about nutrition and health",
+        "chat_placeholder": "Type your question here...",
+        "send": "Send",
+        "login_required": "Please login to continue",
+        "login_success": "Login successful!",
+        "register_success": "Registration successful!",
+        "invalid_credentials": "Invalid username or password",
+        "passwords_mismatch": "Passwords do not match",
+        "user_exists": "Username already exists",
+        "image_uploaded": "Image uploaded successfully!",
+        "export_report": "📥 Export Report",
+        "footer_disclaimer": "⚕️ BioGuard AI is an awareness tool only and does not constitute medical diagnosis. Always consult a healthcare professional.",
+        "personalized_note": "📋 Personalized analysis based on your medical profile",
+        "medical_vault": "🗂️ Medical Vault",
+        "medical_vault_desc": "Store and manage your medical documents",
+        "upload_medical_file": "Upload Medical File",
+        "file_category": "File Category",
+        "cat_xray": "X-Ray / Scan",
+        "cat_lab": "Lab Results",
+        "cat_prescription": "Prescription",
+        "cat_report": "Medical Report",
+        "cat_other": "Other",
+        "analyze_file": "🔍 Analyze with AI",
+        "your_files": "Your Medical Files",
+        "no_files": "No medical files uploaded yet",
+        "delete_file": "Delete",
+        "dashboard": "📊 Dashboard",
+        "avg_health_score": "Average Health Score",
+        "total_scans": "Total Scans",
+        "safe_products": "Safe Products",
+        "warning_products": "Warning Products",
+        "danger_products": "Danger Products",
+        "nutrition_summary": "Nutrition Summary",
+        "total_carbs": "Total Carbs",
+        "total_fats": "Total Fats",
+        "total_sodium": "Total Sodium",
+        "recent_scans": "Recent Scans",
+        "sync_records": "🔄 Sync Medical Records",
+        "sync_coming_soon": "External sync coming soon!",
+        "nav_vault": "🗂️ Vault",
+        "about_desc": "An intelligent system for food and medical analysis, built by Palestinian hands to empower community health awareness.",
+        "developer_info": "👨‍💻 Developer: Ali Riyad Faraj",
+        "location_info": "📍 Location: Palestine 🇵🇸",
+        "version_info": "📦 Version: 2.0.0",
+        "made_in_palestine": "Made in Palestine 🇵🇸",
+        "privacy_title": "🔒 Privacy & Security",
+        "privacy_text": "All user data and medical reports are processed with utmost privacy. We are committed to not sharing any sensitive data.",
+        "disclaimer_full": "This application (BioGuard AI) is a technical effort by developer Ali Riyad Faraj, intended for educational and awareness purposes only. Given the health situation specifics in Palestine, it is always advisable to consult certified Palestinian medical centers before making any medical decision based on AI analysis."
+    },
+    "ar": {
+        "app_title": "BioGuard AI",
+        "app_subtitle": "حارسك الصحي الذكي",
+        "change_theme": "🔄 تغيير السمة",
+        "scan_product": "امسح منتجك الغذائي",
+        "upload_hint": "ارفع صورة الباركود أو جدول المكونات",
+        "choose_image": "اختر صورة",
+        "analyze_btn": "🔍 تحليل المنتج",
+        "api_missing": "⚠️ مفتاح API غير موجود. يرجى إضافة OPENAI_API_KEY",
+        "analyzing": "جاري التحليل...",
+        "analysis_failed": "فشل التحليل. تأكد من وضوح الصورة وحاول مرة أخرى.",
+        "health_score": "نقطة صحية",
+        "safe": "آمن ✓",
+        "warning": "تحذير ⚡",
+        "danger": "خطر ⚠",
+        "protein": "بروتين",
+        "carbs": "كربوهيدرات",
+        "fats": "دهون",
+        "sodium": "صوديوم",
+        "clinical_analysis": "🩺 التحليل الطبي",
+        "healthy_alternative": "✨ البديل الصحي",
+        "history": "📋 السجل",
+        "no_history": "لا توجد تحليلات سابقة",
+        "about": "حول",
+        "about_desc": "نظام ذكي لتحليل المنتجات الغذائية باستخدام الذكاء الاصطناعي. يساعدك على اتخاذ قرارات صحية أفضل من خلال تحليل المكونات والقيم الغذائية.",
+        "features": "✨ المميزات",
+        "features_list": "• تحليل فوري للمنتجات الغذائية<br>• تقييم صحي شامل (0-100)<br>• تصنيف NOVA للأغذية المصنعة<br>• اقتراح بدائل صحية<br>• سجل التحليلات السابقة",
+        "disclaimer": "⚠️ تنبيه",
+        "disclaimer_text": "هذا التطبيق للتوعية الصحية فقط وليس بديلاً عن الاستشارة الطبية المتخصصة.",
+        "nav_scan": "📸 مسح",
+        "nav_history": "📋 السجل",
+        "nav_about": "ℹ️ حول",
+        "nav_chat": "💬 دردشة",
+        "score_label": "نقطة",
+        "product": "منتج",
+        "login": "تسجيل الدخول",
+        "register": "إنشاء حساب",
+        "logout": "تسجيل الخروج",
+        "welcome": "مرحباً",
+        "username": "اسم المستخدم",
+        "password": "كلمة المرور",
+        "confirm_password": "تأكيد كلمة المرور",
+        "email": "البريد الإلكتروني",
+        "login_btn": "🔐 دخول",
+        "register_btn": "📝 تسجيل",
+        "no_account": "ليس لديك حساب؟",
+        "have_account": "لديك حساب بالفعل؟",
+        "medical_history": "السجل الطبي",
+        "medical_history_desc": "يرجى ملء معلوماتك الطبية للحصول على تحليل مخصص",
+        "age": "العمر",
+        "gender": "الجنس",
+        "male": "ذكر",
+        "female": "أنثى",
+        "weight": "الوزن (كجم)",
+        "height": "الطول (سم)",
+        "allergies": "الحساسية",
+        "allergies_hint": "مثال: فول سوداني، ألبان، جلوتين",
+        "conditions": "الحالات الطبية",
+        "conditions_hint": "مثال: سكري، ضغط دم",
+        "save_profile": "💾 حفظ الملف الشخصي",
+        "profile_saved": "تم حفظ الملف الشخصي بنجاح!",
+        "chat_title": "🍎 الدردشة الغذائية",
+        "chat_subtitle": "اسألني أي شيء عن التغذية والصحة",
+        "chat_placeholder": "اكتب سؤالك هنا...",
+        "send": "إرسال",
+        "login_required": "يرجى تسجيل الدخول للمتابعة",
+        "login_success": "تم تسجيل الدخول بنجاح!",
+        "register_success": "تم التسجيل بنجاح!",
+        "invalid_credentials": "اسم المستخدم أو كلمة المرور غير صحيحة",
+        "passwords_mismatch": "كلمتا المرور غير متطابقتين",
+        "user_exists": "اسم المستخدم موجود بالفعل",
+        "image_uploaded": "تم تحميل الصورة بنجاح!",
+        "export_report": "📥 تصدير التقرير",
+        "footer_disclaimer": "⚕️ BioGuard AI أداة توعوية فقط ولا تشكل تشخيصاً طبياً. استشر دائماً أخصائي رعاية صحية.",
+        "personalized_note": "📋 تحليل مخصص بناءً على ملفك الطبي",
+        "medical_vault": "🗂️ الخزنة الطبية",
+        "medical_vault_desc": "احفظ وأدر وثائقك الطبية",
+        "upload_medical_file": "رفع ملف طبي",
+        "file_category": "نوع الملف",
+        "cat_xray": "أشعة / فحص",
+        "cat_lab": "نتائج مختبر",
+        "cat_prescription": "وصفة طبية",
+        "cat_report": "تقرير طبي",
+        "cat_other": "أخرى",
+        "analyze_file": "🔍 تحليل بالذكاء الاصطناعي",
+        "your_files": "ملفاتك الطبية",
+        "no_files": "لم يتم رفع أي ملفات طبية بعد",
+        "delete_file": "حذف",
+        "dashboard": "📊 لوحة التحكم",
+        "avg_health_score": "متوسط النقاط الصحية",
+        "total_scans": "إجمالي الفحوصات",
+        "safe_products": "منتجات آمنة",
+        "warning_products": "منتجات تحذيرية",
+        "danger_products": "منتجات خطرة",
+        "nutrition_summary": "ملخص التغذية",
+        "total_carbs": "إجمالي الكربوهيدرات",
+        "total_fats": "إجمالي الدهون",
+        "total_sodium": "إجمالي الصوديوم",
+        "recent_scans": "الفحوصات الأخيرة",
+        "sync_records": "🔄 مزامنة السجلات الطبية",
+        "sync_coming_soon": "المزامنة الخارجية قريباً!",
+        "nav_vault": "🗂️ الخزنة",
+        "about_desc": "نظام ذكي لتحليل المنتجات الغذائية والتقارير الطبية، صُمم بأيدي فلسطينية لتعزيز الوعي الصحي المجتمعي.",
+        "developer_info": "👨‍💻 مطور التطبيق: علي رياض فرج",
+        "location_info": "📍 الموقع: فلسطين 🇵🇸",
+        "version_info": "📦 الإصدار: 2.0.0",
+        "made_in_palestine": "صنع في فلسطين 🇵🇸",
+        "privacy_title": "🔒 الخصوصية والأمان",
+        "privacy_text": "نؤكد أن كافة بيانات المستخدمين والتقارير الطبية المرفوعة تُعالج بمنتهى الخصوصية، مع الالتزام بعدم مشاركة أي بيانات حساسة.",
+        "disclaimer_full": "هذا التطبيق (BioGuard AI) هو جهد تقني من المبرمج علي رياض فرج، وهو مخصص للأغراض التعليمية والتوعوية فقط. نظراً لخصوصية الحالة الصحية في فلسطين، يُنصح دائماً بمراجعة المراكز الطبية الفلسطينية المعتمدة قبل اتخاذ أي قرار طبي بناءً على تحليلات الذكاء الاصطناعي."
+    },
+    "fr": {
+        "app_title": "BioGuard AI",
+        "app_subtitle": "Votre Gardien Santé Intelligent",
+        "change_theme": "🔄 Changer le Thème",
+        "scan_product": "Scannez Votre Produit",
+        "upload_hint": "Téléchargez l'image du code-barres ou des ingrédients",
+        "choose_image": "Choisir une image",
+        "analyze_btn": "🔍 Analyser le Produit",
+        "api_missing": "⚠️ Clé API introuvable. Veuillez ajouter OPENAI_API_KEY",
+        "analyzing": "Analyse en cours...",
+        "analysis_failed": "Échec de l'analyse. Assurez-vous que l'image est claire et réessayez.",
+        "health_score": "Score Santé",
+        "safe": "SÛR ✓",
+        "warning": "ATTENTION ⚡",
+        "danger": "DANGER ⚠",
+        "protein": "Protéines",
+        "carbs": "Glucides",
+        "fats": "Lipides",
+        "sodium": "Sodium",
+        "clinical_analysis": "🩺 Analyse Clinique",
+        "healthy_alternative": "✨ Alternative Saine",
+        "history": "📋 Historique",
+        "no_history": "Aucune analyse précédente",
+        "about": "À Propos",
+        "about_desc": "Un système intelligent d'analyse des produits alimentaires utilisant l'IA. Vous aide à prendre de meilleures décisions santé en analysant les ingrédients et les valeurs nutritionnelles.",
+        "features": "✨ Fonctionnalités",
+        "features_list": "• Analyse instantanée des produits<br>• Score santé complet (0-100)<br>• Classification NOVA des aliments transformés<br>• Suggestions d'alternatives saines<br>• Historique des analyses",
+        "disclaimer": "⚠️ Avertissement",
+        "disclaimer_text": "Cette application est uniquement à des fins de sensibilisation à la santé et ne remplace pas un avis médical professionnel.",
+        "nav_scan": "📸 Scanner",
+        "nav_history": "📋 Historique",
+        "nav_about": "ℹ️ À Propos",
+        "nav_chat": "💬 Chat",
+        "score_label": "Score",
+        "product": "Produit",
+        "login": "Connexion",
+        "register": "Inscription",
+        "logout": "Déconnexion",
+        "welcome": "Bienvenue",
+        "username": "Nom d'utilisateur",
+        "password": "Mot de passe",
+        "confirm_password": "Confirmer le mot de passe",
+        "email": "Email",
+        "login_btn": "🔐 Connexion",
+        "register_btn": "📝 S'inscrire",
+        "no_account": "Pas de compte?",
+        "have_account": "Vous avez déjà un compte?",
+        "medical_history": "Historique Médical",
+        "medical_history_desc": "Veuillez remplir vos informations médicales pour une analyse personnalisée",
+        "age": "Âge",
+        "gender": "Genre",
+        "male": "Homme",
+        "female": "Femme",
+        "weight": "Poids (kg)",
+        "height": "Taille (cm)",
+        "allergies": "Allergies",
+        "allergies_hint": "ex: arachides, produits laitiers, gluten",
+        "conditions": "Conditions Médicales",
+        "conditions_hint": "ex: diabète, hypertension",
+        "save_profile": "💾 Enregistrer le Profil",
+        "profile_saved": "Profil enregistré avec succès!",
+        "chat_title": "🍎 Chat Nutrition",
+        "chat_subtitle": "Posez-moi vos questions sur la nutrition et la santé",
+        "chat_placeholder": "Tapez votre question ici...",
+        "send": "Envoyer",
+        "login_required": "Veuillez vous connecter pour continuer",
+        "login_success": "Connexion réussie!",
+        "register_success": "Inscription réussie!",
+        "invalid_credentials": "Nom d'utilisateur ou mot de passe invalide",
+        "passwords_mismatch": "Les mots de passe ne correspondent pas",
+        "user_exists": "Ce nom d'utilisateur existe déjà",
+        "image_uploaded": "Image téléchargée avec succès!",
+        "export_report": "📥 Exporter le Rapport",
+        "footer_disclaimer": "⚕️ BioGuard AI est un outil de sensibilisation uniquement et ne constitue pas un diagnostic médical. Consultez toujours un professionnel de santé.",
+        "personalized_note": "📋 Analyse personnalisée basée sur votre profil médical",
+        "medical_vault": "🗂️ Coffre Médical",
+        "medical_vault_desc": "Stockez et gérez vos documents médicaux",
+        "upload_medical_file": "Télécharger un fichier médical",
+        "file_category": "Catégorie du fichier",
+        "cat_xray": "Radiographie / Scan",
+        "cat_lab": "Résultats de laboratoire",
+        "cat_prescription": "Ordonnance",
+        "cat_report": "Rapport médical",
+        "cat_other": "Autre",
+        "analyze_file": "🔍 Analyser avec l'IA",
+        "your_files": "Vos fichiers médicaux",
+        "no_files": "Aucun fichier médical téléchargé",
+        "delete_file": "Supprimer",
+        "dashboard": "📊 Tableau de bord",
+        "avg_health_score": "Score santé moyen",
+        "total_scans": "Total des scans",
+        "safe_products": "Produits sûrs",
+        "warning_products": "Produits à surveiller",
+        "danger_products": "Produits dangereux",
+        "nutrition_summary": "Résumé nutritionnel",
+        "total_carbs": "Glucides totaux",
+        "total_fats": "Lipides totaux",
+        "total_sodium": "Sodium total",
+        "recent_scans": "Scans récents",
+        "sync_records": "🔄 Synchroniser les dossiers médicaux",
+        "sync_coming_soon": "Synchronisation externe bientôt disponible!",
+        "nav_vault": "🗂️ Coffre",
+        "about_desc": "Un système intelligent d'analyse alimentaire et médicale, créé par des mains palestiniennes pour promouvoir la sensibilisation à la santé communautaire.",
+        "developer_info": "👨‍💻 Développeur: Ali Riyad Faraj",
+        "location_info": "📍 Lieu: Palestine 🇵🇸",
+        "version_info": "📦 Version: 2.0.0",
+        "made_in_palestine": "Fabriqué en Palestine 🇵🇸",
+        "privacy_title": "🔒 Confidentialité et Sécurité",
+        "privacy_text": "Toutes les données utilisateur et rapports médicaux sont traités avec la plus grande confidentialité. Nous nous engageons à ne partager aucune donnée sensible.",
+        "disclaimer_full": "Cette application (BioGuard AI) est un effort technique du développeur Ali Riyad Faraj, destinée uniquement à des fins éducatives et de sensibilisation. Il est toujours conseillé de consulter des centres médicaux certifiés avant de prendre toute décision médicale basée sur l'analyse IA."
+    }
+}
+
+def t(key: str) -> str:
+    """Get translation for current language"""
+    lang = st.session_state.get("language", "en")
+    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
+
+# --- THEMES ---
+THEMES = {
+    "ocean": {
+        "bg": "linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #0d47a1 100%)",
+        "primary": "#00bcd4",
+        "secondary": "#4dd0e1",
+        "accent": "#18ffff",
+        "card": "rgba(0, 188, 212, 0.08)",
+        "text": "#e0f7fa"
+    },
+    "sunset": {
+        "bg": "linear-gradient(135deg, #1a0a1f 0%, #4a148c 50%, #e65100 100%)",
+        "primary": "#ff6f00",
+        "secondary": "#ffab00",
+        "accent": "#ffd600",
+        "card": "rgba(255, 111, 0, 0.08)",
+        "text": "#fff3e0"
+    },
+    "forest": {
+        "bg": "linear-gradient(135deg, #0d1f0d 0%, #1b5e20 50%, #2e7d32 100%)",
+        "primary": "#00e676",
+        "secondary": "#69f0ae",
+        "accent": "#b9f6ca",
+        "card": "rgba(0, 230, 118, 0.08)",
+        "text": "#e8f5e9"
+    },
+    "neon": {
+        "bg": "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)",
+        "primary": "#ff00ff",
+        "secondary": "#00ffff",
+        "accent": "#ffff00",
+        "card": "rgba(255, 0, 255, 0.08)",
+        "text": "#ffffff"
+    }
+}
+
+THEME_NAMES = list(THEMES.keys())
+
+# --- PAGE CONFIG ---
+st.set_page_config(
+    page_title="BioGuard AI - Medical Ecosystem",
+    page_icon="❤️",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
+# --- SESSION STATE ---
+if "theme_idx" not in st.session_state:
+    st.session_state.theme_idx = 0
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "current_view" not in st.session_state:
+    st.session_state.current_view = "login"
+if "language" not in st.session_state:
+    st.session_state.language = "en"
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {}
+if "medical_profile" not in st.session_state:
+    st.session_state.medical_profile = {}
+if "profile_complete" not in st.session_state:
+    st.session_state.profile_complete = False
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "login"
+
+def get_theme():
+    return THEMES[THEME_NAMES[st.session_state.theme_idx]]
+
+def rotate_theme():
+    st.session_state.theme_idx = (st.session_state.theme_idx + 1) % len(THEME_NAMES)
+
+theme = get_theme()
+
+# --- MOBILE-FIRST CSS ---
+st.markdown(f"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+    
+    * {{
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }}
+    
+    html, body, [class*="css"] {{
+        font-family: 'Inter', sans-serif;
+    }}
+    
+    .stApp {{
+        background: {theme['bg']};
+        min-height: 100vh;
+    }}
+    
+    /* Hide default Streamlit elements */
+    #MainMenu, header, footer {{visibility: hidden;}}
+    .stDeployButton {{display: none;}}
+    [data-testid="stSidebar"] {{display: none;}}
+    .block-container {{
+        padding: 1rem 1rem 6rem 1rem !important;
+        max-width: 480px !important;
+        margin: 0 auto;
+    }}
+    
+    /* Mobile Header */
+    .mobile-header {{
+        text-align: center;
+        padding: 1.5rem 0;
+        margin-bottom: 1rem;
+    }}
+    
+    .app-logo {{
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        animation: pulse 2s ease-in-out infinite;
+    }}
+    
+    @keyframes pulse {{
+        0%, 100% {{ transform: scale(1); }}
+        50% {{ transform: scale(1.1); }}
+    }}
+    
+    .app-title {{
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, {theme['primary']}, {theme['secondary']});
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 1px;
+    }}
+    
+    .app-subtitle {{
+        color: {theme['text']};
+        opacity: 0.7;
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }}
+    
+    /* Theme Wheel */
+    .theme-wheel-container {{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 1.5rem 0;
+    }}
+    
+    .theme-wheel {{
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: conic-gradient(
+            {THEMES['ocean']['primary']} 0deg 90deg,
+            {THEMES['sunset']['primary']} 90deg 180deg,
+            {THEMES['forest']['primary']} 180deg 270deg,
+            {THEMES['neon']['primary']} 270deg 360deg
+        );
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 0 30px {theme['primary']}40;
+        transition: all 0.3s ease;
+        animation: rotate-slow 10s linear infinite;
+    }}
+    
+    .theme-wheel:hover {{
+        transform: scale(1.05);
+        box-shadow: 0 0 50px {theme['primary']}60;
+    }}
+    
+    @keyframes rotate-slow {{
+        from {{ transform: rotate(0deg); }}
+        to {{ transform: rotate(360deg); }}
+    }}
+    
+    .theme-wheel-inner {{
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: {theme['bg']};
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.5rem;
+        color: {theme['primary']};
+        font-weight: 700;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+    }}
+    
+    /* Glass Cards */
+    .glass-card {{
+        background: {theme['card']};
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        border: 1px solid {theme['primary']}30;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.5s ease;
+    }}
+    
+    .glass-card:hover {{
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px {theme['primary']}20;
+        border-color: {theme['primary']}50;
+    }}
+    
+    @keyframes fadeInUp {{
+        from {{
+            opacity: 0;
+            transform: translateY(20px);
+        }}
+        to {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+    }}
+    
+    /* Upload Area */
+    .upload-area {{
+        border: 2px dashed {theme['primary']}50;
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: {theme['card']};
+    }}
+    
+    .upload-area:hover {{
+        border-color: {theme['primary']};
+        background: {theme['primary']}10;
+    }}
+    
+    .upload-icon {{
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }}
+    
+    /* Result Cards */
+    .result-header {{
+        text-align: center;
+        padding: 1rem 0;
+    }}
+    
+    .score-circle {{
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: conic-gradient(
+            {theme['primary']} var(--score-deg),
+            {theme['card']} var(--score-deg)
+        );
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto 1rem auto;
+        box-shadow: 0 0 30px {theme['primary']}30;
+    }}
+    
+    .score-inner {{
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: {theme['bg']};
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }}
+    
+    .score-value {{
+        font-size: 2rem;
+        font-weight: 800;
+        color: {theme['primary']};
+    }}
+    
+    .score-label {{
+        font-size: 0.7rem;
+        color: {theme['text']};
+        opacity: 0.7;
+    }}
+    
+    /* Metric Cards */
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin: 1rem 0;
+    }}
+    
+    .metric-card {{
+        background: {theme['card']};
+        border-radius: 16px;
+        padding: 1rem;
+        text-align: center;
+        border: 1px solid {theme['primary']}20;
+        transition: all 0.3s ease;
+    }}
+    
+    .metric-card:hover {{
+        transform: scale(1.02);
+        border-color: {theme['primary']}40;
+    }}
+    
+    .metric-icon {{
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }}
+    
+    .metric-value {{
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: {theme['primary']};
+    }}
+    
+    .metric-label {{
+        font-size: 0.75rem;
+        color: {theme['text']};
+        opacity: 0.6;
+    }}
+    
+    /* Verdict Badge */
+    .verdict-safe {{
+        background: linear-gradient(135deg, #00ff8830, #00ff8810);
+        border: 2px solid #00ff88;
+        color: #00ff88;
+    }}
+    
+    .verdict-warning {{
+        background: linear-gradient(135deg, #ffaa0030, #ffaa0010);
+        border: 2px solid #ffaa00;
+        color: #ffaa00;
+    }}
+    
+    .verdict-danger {{
+        background: linear-gradient(135deg, #ff444430, #ff444410);
+        border: 2px solid #ff4444;
+        color: #ff4444;
+    }}
+    
+    .verdict-badge {{
+        display: inline-block;
+        padding: 0.5rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 0.5rem 0;
+    }}
+    
+    /* Bottom Navigation */
+    .bottom-nav {{
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: {theme['bg']};
+        backdrop-filter: blur(20px);
+        border-top: 1px solid {theme['primary']}30;
+        padding: 0.75rem 1rem;
+        display: flex;
+        justify-content: space-around;
+        z-index: 1000;
+    }}
+    
+    .nav-item {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: {theme['text']};
+        opacity: 0.5;
+    }}
+    
+    .nav-item.active {{
+        opacity: 1;
+        background: {theme['primary']}20;
+        color: {theme['primary']};
+    }}
+    
+    .nav-icon {{
+        font-size: 1.5rem;
+        margin-bottom: 0.25rem;
+    }}
+    
+    .nav-label {{
+        font-size: 0.7rem;
+        font-weight: 500;
+    }}
+    
+    /* Buttons */
+    .stButton > button {{
+        background: linear-gradient(135deg, {theme['primary']}, {theme['secondary']}) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 16px !important;
+        padding: 0.875rem 2rem !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        width: 100% !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 20px {theme['primary']}40 !important;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 30px {theme['primary']}60 !important;
+    }}
+    
+    /* Info boxes */
+    .info-box {{
+        background: {theme['card']};
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 0.75rem 0;
+        border-left: 4px solid {theme['primary']};
+    }}
+    
+    .info-title {{
+        font-weight: 600;
+        color: {theme['primary']};
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }}
+    
+    .info-content {{
+        color: {theme['text']};
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }}
+    
+    /* Hide Streamlit file uploader styling */
+    [data-testid="stFileUploader"] {{
+        background: transparent !important;
+    }}
+    
+    [data-testid="stFileUploader"] > div {{
+        background: {theme['card']} !important;
+        border: 2px dashed {theme['primary']}50 !important;
+        border-radius: 16px !important;
+    }}
+    
+    /* Spinner */
+    .stSpinner > div {{
+        border-top-color: {theme['primary']} !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
+
+# --- AI BACKEND ---
+def _get_api_key() -> str:
+    """Get API key from st.secrets (Streamlit Cloud) or environment variable (local)"""
+    try:
+        return st.secrets.get("OPENAI_API_KEY", "").strip()
+    except Exception:
+        return (os.getenv("OPENAI_API_KEY") or "").strip()
+
+def setup_ai():
+    api_key = _get_api_key()
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key)
+
+def get_score_color(score: int) -> tuple:
+    """Return color based on health score: 0-40 red, 41-70 orange, 71-100 green"""
+    if score <= 40:
+        return "#ff4444", "DANGER"
+    elif score <= 70:
+        return "#ffaa00", "WARNING"
+    else:
+        return "#00ff88", "SAFE"
+
+def generate_report_text(result: Dict, medical_profile: Optional[Dict] = None) -> str:
+    """Generate text report for export"""
+    report = f"""
+═══════════════════════════════════════
+        BioGuard AI - Analysis Report
+═══════════════════════════════════════
+
+📦 Product: {result.get('name', 'Unknown')}
+📊 Health Score: {result.get('health_score', 0)}/100
+🏷️ NOVA Score: {result.get('nova_score', 'N/A')}
+✅ Verdict: {result.get('verdict', 'N/A')}
+
+📈 NUTRITIONAL VALUES
+─────────────────────
+"""
+    macros = result.get('macros', {})
+    for key, value in macros.items():
+        report += f"  • {key.capitalize()}: {value}\n"
+    
+    report += f"""
+🩺 CLINICAL ANALYSIS
+─────────────────────
+{result.get('clinical_verdict', 'N/A')}
+
+⚠️ WARNINGS
+─────────────────────
+"""
+    warnings = result.get('warnings', [])
+    for w in warnings:
+        report += f"  • {w}\n"
+    
+    report += f"""
+✨ HEALTHY ALTERNATIVE
+─────────────────────
+{result.get('bio_alternative', 'N/A')}
+"""
+    
+    if medical_profile:
+        report += f"""
+👤 USER PROFILE CONSIDERED
+─────────────────────
+  • Age: {medical_profile.get('age', 'N/A')}
+  • Allergies: {medical_profile.get('allergies', 'None')}
+  • Conditions: {medical_profile.get('conditions', 'None')}
+"""
+    
+    report += """
+═══════════════════════════════════════
+⚕️ DISCLAIMER: This is an awareness tool
+only and does not constitute medical 
+diagnosis. Always consult a healthcare
+professional.
+═══════════════════════════════════════
+"""
+    return report
+
+def prepare_image(uploaded_file) -> Image.Image:
+    img = Image.open(uploaded_file)
+    img.thumbnail((700, 700))
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format="JPEG", quality=85, optimize=True)
+    img_byte_arr.seek(0)
+    return Image.open(img_byte_arr)
+
+def image_to_base64(img: Image.Image) -> str:
+    """Convert PIL Image to base64 string for OpenAI API"""
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG", quality=85)
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def clean_json_text(text: str) -> str:
+    text = text.replace("```json", "").replace("```", "").strip()
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        return m.group(0).strip()
+    return text
+
+def call_openai_vision(client: OpenAI, prompt: str, img: Image.Image) -> str:
+    """Call OpenAI GPT-4o with vision capability"""
+    base64_image = image_to_base64(img)
+    
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        max_tokens=2048,
+        temperature=0.3
+    )
+    return response.choices[0].message.content
+
+def call_model_with_timeout_legacy(model, prompt: str, img: Image.Image, timeout_s: int = 35) -> str:
+    def _do_call() -> str:
+        resp = model.generate_content([prompt, img])
+        return getattr(resp, "text", None) or str(resp)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(_do_call)
+        return fut.result(timeout=timeout_s)
+
+# --- UI COMPONENTS ---
+def render_header():
+    theme = get_theme()
+    st.markdown(f"""
+    <!-- Palestinian Flag Accent Bar -->
+    <div style="height: 4px; background: linear-gradient(90deg, #000000 25%, #ffffff 25%, #ffffff 50%, #007a3d 50%, #007a3d 75%, #ee2244 75%); border-radius: 2px; margin-bottom: 0.5rem;"></div>
+    
+    <div class="mobile-header">
+        <div class="app-logo" style="position: relative;">
+            <span style="font-size: 2.5rem;">❤️</span>
+            <span style="position: absolute; bottom: -5px; right: -8px; font-size: 1.2rem;">🩺</span>
+        </div>
+        <div class="app-title" style="background: linear-gradient(135deg, {theme['primary']}, {theme['accent']}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{t('app_title')}</div>
+        <div class="app-subtitle">{t('app_subtitle')}</div>
+        <div style="font-size: 0.65rem; opacity: 0.6; margin-top: 0.2rem;">🇵🇸 {t('made_in_palestine')}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_language_selector():
+    theme = get_theme()
+    st.markdown(f"""
+    <style>
+        .lang-selector {{
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }}
+        .lang-btn {{
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: {theme['card']};
+            border: 1px solid {theme['primary']}40;
+            color: {theme['text']};
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+        .lang-btn.active {{
+            background: {theme['primary']}30;
+            border-color: {theme['primary']};
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("🇬🇧 EN", key="lang_en", use_container_width=True):
+            st.session_state.language = "en"
+            st.rerun()
+    with col2:
+        if st.button("🇸🇦 AR", key="lang_ar", use_container_width=True):
+            st.session_state.language = "ar"
+            st.rerun()
+    with col3:
+        if st.button("🇫🇷 FR", key="lang_fr", use_container_width=True):
+            st.session_state.language = "fr"
+            st.rerun()
+
+def render_theme_wheel():
+    theme_name = THEME_NAMES[st.session_state.theme_idx].upper()
+    st.markdown(f"""
+    <div class="theme-wheel-container">
+        <div class="theme-wheel">
+            <div class="theme-wheel-inner">{theme_name[:3]}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button(t('change_theme'), key="theme_btn"):
+            rotate_theme()
+            st.rerun()
+
+def render_scan_view():
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 1rem;">
+        <div class="upload-icon">📸</div>
+        <div style="font-weight: 600; margin-bottom: 0.5rem;">{t('scan_product')}</div>
+        <div style="font-size: 0.8rem; opacity: 0.7;">{t('upload_hint')}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader(
+        t('choose_image'),
+        type=["jpg", "png", "jpeg", "webp"]
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if uploaded_file:
+        processed_img = prepare_image(uploaded_file)
+        st.image(processed_img, use_container_width=True)
+        
+        if st.button(t('analyze_btn'), key="analyze_btn"):
+            client = setup_ai()
+            if client is None:
+                st.error(t('api_missing'))
+                return
+            
+            with st.spinner(t('analyzing')):
+                try:
+                    # Get user context
+                    lang = st.session_state.language
+                    medical_profile = st.session_state.get('medical_profile', {})
+                    
+                    # ═══════════════════════════════════════════════════════════
+                    # PRODUCTION-GRADE AI ANALYSIS PIPELINE
+                    # ═══════════════════════════════════════════════════════════
+                    result = analyze_food_product(client, processed_img, lang, medical_profile)
+                    
+                    # Debug output (console only)
+                    print(f"[BioGuard AI] Analysis Complete: {result.get('name')} | Score: {result.get('health_score')} | Confidence: {result.get('confidence_level')}")
+                    
+                    # Store in session history
+                    st.session_state.history.insert(0, result)
+                    if len(st.session_state.history) > 10:
+                        st.session_state.history.pop()
+                    
+                    # Save to database if user is logged in
+                    if st.session_state.get('user_id'):
+                        db_save_analysis(st.session_state.user_id, result)
+                    
+                    # Store current result for export
+                    st.session_state.current_result = result
+                    
+                    # Render the result
+                    render_result(result)
+                    
+                    # Show confidence indicator
+                    confidence = result.get("confidence_level", "medium")
+                    if confidence == "low":
+                        st.warning("⚠️ Low confidence - image quality may affect accuracy. Consider retaking the photo.")
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    st.error(f"❌ Analysis Error: {error_msg}")
+                    
+                    # Show helpful hints based on error type
+                    if "401" in error_msg or "API_KEY" in error_msg.upper() or "invalid" in error_msg.lower():
+                        st.warning("🔑 API Key issue - check your OPENAI_API_KEY in .env file")
+                    elif "safety" in error_msg.lower() or "blocked" in error_msg.lower():
+                        st.warning("🛡️ Content blocked by safety filters - try a different image")
+                    elif "timeout" in error_msg.lower():
+                        st.warning("⏱️ Request timeout - try again")
+                    elif "rate" in error_msg.lower() or "limit" in error_msg.lower():
+                        st.warning("⏳ Rate limit reached - please wait a moment and try again")
+
+def render_result(result: Dict[str, Any]):
+    theme = get_theme()
+    score = int(result.get("health_score", 50))
+    
+    # Color-coded verdict based on health_score (0-40 red, 41-70 orange, 71-100 green)
+    score_color, calculated_verdict = get_score_color(score)
+    verdict = calculated_verdict
+    
+    # Verdict styling based on score
+    if score > 70:
+        verdict_class = "verdict-safe"
+        verdict_text = t('safe')
+        border_color = "#00ff88"
+    elif score > 40:
+        verdict_class = "verdict-warning"
+        verdict_text = t('warning')
+        border_color = "#ffaa00"
+    else:
+        verdict_class = "verdict-danger"
+        verdict_text = t('danger')
+        border_color = "#ff4444"
+    
+    # Show personalized note if medical profile exists
+    medical_profile = st.session_state.get('medical_profile', {})
+    if medical_profile and (medical_profile.get('allergies') or medical_profile.get('conditions')):
+        st.markdown(f"""
+        <div class="glass-card" style="border-left: 3px solid {theme['primary']}; padding: 0.8rem;">
+            <div style="font-size: 0.85rem; color: {theme['primary']};">{t('personalized_note')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div class="glass-card">
+        <div class="result-header">
+            <h3 style="color: {theme['primary']}; margin-bottom: 0.5rem;">{result.get('name', t('product'))}</h3>
+            <span class="verdict-badge {verdict_class}">{verdict_text}</span>
+        </div>
+        
+        <div style="--score-deg: {score * 3.6}deg;" class="score-circle">
+            <div class="score-inner">
+                <div class="score-value">{score}</div>
+                <div class="score-label">{t('health_score')}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Macros
+    macros = result.get("macros", {})
+    st.markdown(f"""
+    <div class="metric-grid">
+        <div class="metric-card">
+            <div class="metric-icon">🥩</div>
+            <div class="metric-value">{macros.get('protein', 'N/A')}</div>
+            <div class="metric-label">{t('protein')}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🍞</div>
+            <div class="metric-value">{macros.get('carbs', 'N/A')}</div>
+            <div class="metric-label">{t('carbs')}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🧈</div>
+            <div class="metric-value">{macros.get('fats', 'N/A')}</div>
+            <div class="metric-label">{t('fats')}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🧂</div>
+            <div class="metric-value">{macros.get('sodium', 'N/A')}</div>
+            <div class="metric-label">{t('sodium')}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # NOVA Score and Confidence Level
+    nova_score = result.get("nova_score", 3)
+    confidence = result.get("confidence_level", "medium")
+    nova_colors = {1: "#00ff88", 2: "#88ff00", 3: "#ffaa00", 4: "#ff4444"}
+    nova_labels = {1: "Unprocessed", 2: "Culinary", 3: "Processed", 4: "Ultra-processed"}
+    confidence_colors = {"high": "#00ff88", "medium": "#ffaa00", "low": "#ff4444"}
+    
+    st.markdown(f"""
+    <div class="glass-card" style="padding: 0.8rem;">
+        <div style="display: flex; justify-content: space-around; text-align: center;">
+            <div>
+                <div style="font-size: 0.7rem; opacity: 0.7;">NOVA Score</div>
+                <div style="font-size: 1.5rem; font-weight: bold; color: {nova_colors.get(nova_score, '#ffaa00')};">{nova_score}</div>
+                <div style="font-size: 0.65rem; opacity: 0.6;">{nova_labels.get(nova_score, 'Unknown')}</div>
+            </div>
+            <div style="border-left: 1px solid rgba(255,255,255,0.2); padding-left: 1rem;">
+                <div style="font-size: 0.7rem; opacity: 0.7;">Confidence</div>
+                <div style="font-size: 1rem; font-weight: bold; color: {confidence_colors.get(confidence, '#ffaa00')};">{confidence.upper()}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Ingredients List
+    ingredients = result.get("ingredients", [])
+    if ingredients and isinstance(ingredients, list) and ingredients[0] != "unknown":
+        ingredients_html = ", ".join(ingredients[:15])  # Limit to 15 items for display
+        if len(ingredients) > 15:
+            ingredients_html += f" (+{len(ingredients) - 15} more)"
+        st.markdown(f"""
+        <div class="glass-card" style="padding: 0.8rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: {theme['primary']}; margin-bottom: 0.5rem;">📋 Ingredients</div>
+            <div style="font-size: 0.75rem; opacity: 0.85; line-height: 1.4;">{ingredients_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Clinical verdict
+    clinical = result.get("clinical_verdict", "")
+    if clinical:
+        st.markdown(f"""
+        <div class="info-box">
+            <div class="info-title">{t('clinical_analysis')}</div>
+            <div class="info-content">{clinical}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Warnings
+    warnings = result.get("warnings", [])
+    if warnings and isinstance(warnings, list):
+        for w in warnings:
+            st.markdown(f"""
+            <div class="info-box" style="border-left-color: #ff4444;">
+                <div class="info-content" style="color: #ff4444;">⚠️ {w}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Alternative
+    alt = result.get("bio_alternative", "")
+    if alt and alt != "N/A":
+        st.markdown(f"""
+        <div class="info-box" style="border-left-color: #00ff88;">
+            <div class="info-title" style="color: #00ff88;">{t('healthy_alternative')}</div>
+            <div class="info-content">{alt}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Export Report Button
+    medical_profile = st.session_state.get('medical_profile', {})
+    report_text = generate_report_text(result, medical_profile)
+    st.download_button(
+        label=t('export_report'),
+        data=report_text,
+        file_name=f"bioguard_report_{result.get('name', 'product').replace(' ', '_')}.txt",
+        mime="text/plain",
+        key="export_btn",
+        use_container_width=True
+    )
+
+def render_history_view():
+    theme = get_theme()
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 1rem;">
+        <h3 style="color: {theme['primary']};">{t('history')}</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not st.session_state.history:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center; padding: 3rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+            <div style="opacity: 0.7;">{t('no_history')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        for i, item in enumerate(st.session_state.history):
+            score = int(item.get("health_score", 50))
+            verdict = item.get("verdict", "WARNING").upper()
+            color = "#00ff88" if verdict == "SAFE" else "#ff4444" if verdict == "DANGER" else "#ffaa00"
+            
+            st.markdown(f"""
+            <div class="glass-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: 600;">{item.get('name', t('product'))}</div>
+                        <div style="font-size: 0.8rem; opacity: 0.6;">{t('score_label')}: {score}/100</div>
+                    </div>
+                    <div style="font-size: 1.5rem; color: {color};">
+                        {"✓" if verdict == "SAFE" else "⚠" if verdict == "DANGER" else "⚡"}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def render_about_view():
+    theme = get_theme()
+    
+    # Palestinian flag colors header
+    st.markdown("""
+    <div style='text-align: center; padding: 15px; margin-bottom: 1rem; border-radius: 15px; 
+                background: linear-gradient(90deg, #000000 25%, #ffffff 25%, #ffffff 50%, #007a3d 50%, #007a3d 75%, #ee2244 75%);'>
+        <h4 style='color: #ffffff; text-shadow: 2px 2px 4px #000000; margin: 0;'>🇵🇸</h4>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem; position: relative; display: inline-block;">
+            <span style="font-size: 3rem;">❤️</span>
+            <span style="position: absolute; bottom: -5px; right: -12px; font-size: 1.5rem;">🩺</span>
+        </div>
+        <h2 style="color: {theme['primary']}; margin: 1rem 0 0.5rem;">{t('app_title')}</h2>
+        <p style="opacity: 0.9; line-height: 1.6; font-size: 0.95rem;">
+            {t('about_desc')}
+        </p>
+    </div>
+    
+    <!-- Developer Info Card -->
+    <div class="glass-card" style="border-left: 4px solid #007a3d;">
+        <div style="text-align: center; padding: 0.5rem;">
+            <div style="font-size: 1.1rem; font-weight: 600; color: {theme['primary']}; margin-bottom: 0.8rem;">
+                {t('made_in_palestine')}
+            </div>
+            <div style="font-size: 0.95rem; margin-bottom: 0.5rem;">{t('developer_info')}</div>
+            <div style="font-size: 0.95rem; margin-bottom: 0.5rem;">{t('location_info')}</div>
+            <div style="font-size: 0.85rem; opacity: 0.8;">{t('version_info')}</div>
+        </div>
+    </div>
+    
+    <!-- Features Card -->
+    <div class="glass-card">
+        <div class="info-title">{t('features')}</div>
+        <div class="info-content">
+            {t('features_list')}
+        </div>
+    </div>
+    
+    <!-- Privacy Card -->
+    <div class="glass-card" style="border-left: 4px solid #ee2244;">
+        <div class="info-title">{t('privacy_title')}</div>
+        <div class="info-content" style="font-size: 0.85rem;">
+            {t('privacy_text')}
+        </div>
+    </div>
+    
+    <!-- Disclaimer Card -->
+    <div class="glass-card">
+        <div class="info-title">{t('disclaimer')}</div>
+        <div class="info-content" style="font-size: 0.85rem;">
+            {t('disclaimer_full')}
+        </div>
+    </div>
+    
+    <!-- Copyright Footer -->
+    <div style="text-align: center; padding: 1rem; opacity: 0.7; font-size: 0.75rem;">
+        © 2024-2025 Ali Riyad Faraj. All Rights Reserved.
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_login_view():
+    theme = get_theme()
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">🛡️</div>
+        <h2 style="color: {theme['primary']}; margin-bottom: 1rem;">{t('app_title')}</h2>
+        <p style="opacity: 0.8;">{t('app_subtitle')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
+    if st.session_state.auth_mode == "login":
+        st.markdown(f"<h3 style='text-align: center; color: {theme['primary']};'>{t('login')}</h3>", unsafe_allow_html=True)
+        username = st.text_input(t('username'), key="login_user")
+        password = st.text_input(t('password'), type="password", key="login_pass")
+        
+        if st.button(t('login_btn'), key="login_submit", use_container_width=True):
+            # Use database for login
+            user_data = db_login_user(username, password)
+            if user_data:
+                st.session_state.logged_in = True
+                st.session_state.username = user_data["username"]
+                st.session_state.user_id = user_data["id"]
+                # Load medical profile from database
+                medical_profile = db_get_medical_profile(user_data["id"])
+                st.session_state.medical_profile = medical_profile or {}
+                st.session_state.profile_complete = bool(medical_profile)
+                # Load history from database
+                st.session_state.history = db_get_history(user_data["id"])
+                if st.session_state.profile_complete:
+                    st.session_state.current_view = "scan"
+                else:
+                    st.session_state.current_view = "medical_history"
+                st.success(t('login_success'))
+                st.rerun()
+            else:
+                st.error(t('invalid_credentials'))
+        
+        st.markdown(f"<p style='text-align: center; margin-top: 1rem;'>{t('no_account')}</p>", unsafe_allow_html=True)
+        if st.button(t('register'), key="goto_register", use_container_width=True):
+            st.session_state.auth_mode = "register"
+            st.rerun()
+    else:
+        st.markdown(f"<h3 style='text-align: center; color: {theme['primary']};'>{t('register')}</h3>", unsafe_allow_html=True)
+        username = st.text_input(t('username'), key="reg_user")
+        email = st.text_input(t('email'), key="reg_email")
+        password = st.text_input(t('password'), type="password", key="reg_pass")
+        confirm = st.text_input(t('confirm_password'), type="password", key="reg_confirm")
+        
+        if st.button(t('register_btn'), key="reg_submit", use_container_width=True):
+            if password != confirm:
+                st.error(t('passwords_mismatch'))
+            elif username and password:
+                # Use database for registration
+                user_id = db_register_user(username, email, password)
+                if user_id:
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.session_state.user_id = user_id
+                    st.session_state.medical_profile = {}
+                    st.session_state.history = []
+                    st.session_state.current_view = "medical_history"
+                    st.success(t('register_success'))
+                    st.rerun()
+                else:
+                    st.error(t('user_exists'))
+        
+        st.markdown(f"<p style='text-align: center; margin-top: 1rem;'>{t('have_account')}</p>", unsafe_allow_html=True)
+        if st.button(t('login'), key="goto_login", use_container_width=True):
+            st.session_state.auth_mode = "login"
+            st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def render_medical_history_view():
+    theme = get_theme()
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🏥</div>
+        <h2 style="color: {theme['primary']}; margin-bottom: 0.5rem;">{t('medical_history')}</h2>
+        <p style="opacity: 0.8; font-size: 0.9rem;">{t('medical_history_desc')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        age = st.number_input(t('age'), min_value=1, max_value=120, value=30, key="med_age")
+    with col2:
+        gender = st.selectbox(t('gender'), [t('male'), t('female')], key="med_gender")
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        weight = st.number_input(t('weight'), min_value=20, max_value=300, value=70, key="med_weight")
+    with col4:
+        height = st.number_input(t('height'), min_value=100, max_value=250, value=170, key="med_height")
+    
+    allergies = st.text_input(t('allergies'), placeholder=t('allergies_hint'), key="med_allergies")
+    conditions = st.text_input(t('conditions'), placeholder=t('conditions_hint'), key="med_conditions")
+    
+    if st.button(t('save_profile'), key="save_med", use_container_width=True):
+        profile = {
+            "age": age,
+            "gender": gender,
+            "weight": weight,
+            "height": height,
+            "allergies": allergies,
+            "conditions": conditions
+        }
+        st.session_state.medical_profile = profile
+        st.session_state.profile_complete = True
+        # Save to database
+        if st.session_state.get('user_id'):
+            db_save_medical_profile(st.session_state.user_id, profile)
+        st.success(t('profile_saved'))
+        st.session_state.current_view = "scan"
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def render_chat_view():
+    theme = get_theme()
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <h2 style="color: {theme['primary']}; margin-bottom: 0.5rem;">{t('chat_title')}</h2>
+        <p style="opacity: 0.8; font-size: 0.9rem;">{t('chat_subtitle')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Display chat messages
+    for msg in st.session_state.chat_messages:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "user":
+            st.markdown(f"""
+            <div class="glass-card" style="margin-left: 20%; background: {theme['primary']}20;">
+                <div style="font-size: 0.9rem;">👤 {content}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="glass-card" style="margin-right: 20%;">
+                <div style="font-size: 0.9rem;">🤖 {content}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Chat input
+    user_input = st.text_input(t('chat_placeholder'), key="chat_input")
+    
+    if st.button(t('send'), key="send_chat", use_container_width=True):
+        if user_input:
+            st.session_state.chat_messages.append({"role": "user", "content": user_input})
+            
+            client = setup_ai()
+            if client:
+                try:
+                    # Build context with medical profile
+                    medical_ctx = ""
+                    if st.session_state.medical_profile:
+                        mp = st.session_state.medical_profile
+                        medical_ctx = f"User profile: Age {mp.get('age')}, Weight {mp.get('weight')}kg, Height {mp.get('height')}cm, Allergies: {mp.get('allergies', 'None')}, Conditions: {mp.get('conditions', 'None')}. "
+                    
+                    # Add medical files context
+                    if st.session_state.get('user_id'):
+                        files_summary = db_get_user_files_summary(st.session_state.user_id)
+                        if files_summary:
+                            medical_ctx += f"\n{files_summary}"
+                    
+                    lang = st.session_state.language
+                    if lang == "ar":
+                        system_msg = "أنت خبير تغذية ودكتور صحة متخصص. لديك إمكانية الوصول لملخص الملفات الطبية للمستخدم. أجب على أسئلة المستخدم بشكل مفيد ومختصر مع مراعاة حالته الصحية. " + medical_ctx
+                    elif lang == "fr":
+                        system_msg = "Vous êtes un expert en nutrition et santé. Vous avez accès au résumé des dossiers médicaux de l'utilisateur. Répondez de manière utile et concise en tenant compte de son état de santé. " + medical_ctx
+                    else:
+                        system_msg = "You are a nutrition and health expert. You have access to the user's medical files summary. Answer questions helpfully and concisely, considering their health condition. " + medical_ctx
+                    
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": user_input}
+                        ],
+                        max_tokens=500,
+                        temperature=0.7
+                    )
+                    bot_response = response.choices[0].message.content
+                    st.session_state.chat_messages.append({"role": "assistant", "content": bot_response})
+                except Exception as e:
+                    st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {str(e)}"})
+            st.rerun()
+
+def render_medical_vault_view():
+    """Render Medical File Vault for uploading and managing medical documents"""
+    theme = get_theme()
+    
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">🗂️</div>
+        <h2 style="color: {theme['primary']}; margin-bottom: 0.5rem;">{t('medical_vault')}</h2>
+        <p style="opacity: 0.8; font-size: 0.9rem;">{t('medical_vault_desc')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # File upload section
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
+    categories = {
+        "xray": t('cat_xray'),
+        "lab": t('cat_lab'),
+        "prescription": t('cat_prescription'),
+        "report": t('cat_report'),
+        "other": t('cat_other')
+    }
+    
+    category = st.selectbox(t('file_category'), list(categories.values()), key="vault_category")
+    category_key = [k for k, v in categories.items() if v == category][0]
+    
+    uploaded_file = st.file_uploader(
+        t('upload_medical_file'),
+        type=["pdf", "jpg", "jpeg", "png", "webp"],
+        key="vault_upload"
+    )
+    
+    if uploaded_file:
+        file_bytes = uploaded_file.read()
+        file_type = uploaded_file.type
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(t('save_profile'), key="save_file_btn", use_container_width=True):
+                if st.session_state.get('user_id'):
+                    file_id = db_save_medical_file(
+                        st.session_state.user_id,
+                        uploaded_file.name,
+                        file_type,
+                        category_key,
+                        file_bytes
+                    )
+                    st.success(f"✅ File saved! ID: {file_id}")
+                    st.rerun()
+        
+        with col2:
+            if st.button(t('analyze_file'), key="analyze_file_btn", use_container_width=True):
+                client = setup_ai()
+                if client and st.session_state.get('user_id'):
+                    with st.spinner(t('analyzing')):
+                        try:
+                            # Extract text from PDF or analyze image
+                            if "pdf" in file_type.lower() and PYMUPDF_AVAILABLE:
+                                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                                text = ""
+                                for page in doc:
+                                    text += page.get_text()
+                                doc.close()
+                                
+                                # Get AI summary
+                                response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": "Summarize this medical document in 2-3 sentences. Focus on key findings, diagnoses, or recommendations."},
+                                        {"role": "user", "content": text[:4000]}
+                                    ],
+                                    max_tokens=200
+                                )
+                                summary = response.choices[0].message.content
+                            else:
+                                # For images, use vision API
+                                img = Image.open(io.BytesIO(file_bytes))
+                                img.thumbnail((800, 800))
+                                buffered = io.BytesIO()
+                                img.save(buffered, format="JPEG", quality=85)
+                                b64_img = base64.b64encode(buffered.getvalue()).decode()
+                                
+                                response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[{
+                                        "role": "user",
+                                        "content": [
+                                            {"type": "text", "text": "Summarize this medical document/image in 2-3 sentences. Focus on key findings."},
+                                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                                        ]
+                                    }],
+                                    max_tokens=200
+                                )
+                                summary = response.choices[0].message.content
+                            
+                            # Save with summary
+                            file_id = db_save_medical_file(
+                                st.session_state.user_id,
+                                uploaded_file.name,
+                                file_type,
+                                category_key,
+                                file_bytes,
+                                summary
+                            )
+                            st.success(f"✅ Analyzed & saved!")
+                            st.info(f"📋 {summary}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Display existing files
+    if st.session_state.get('user_id'):
+        files = db_get_medical_files(st.session_state.user_id)
+        if files:
+            st.markdown(f"<h3 style='color: {theme['primary']};'>{t('your_files')}</h3>", unsafe_allow_html=True)
+            for f in files:
+                icon = "📄" if "pdf" in f['file_type'] else "🖼️"
+                cat_display = categories.get(f['file_category'], f['file_category'])
+                st.markdown(f"""
+                <div class="glass-card" style="padding: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600;">{icon} {f['file_name']}</div>
+                            <div style="font-size: 0.75rem; opacity: 0.7;">{cat_display} • {f['created_at'][:10]}</div>
+                            {f'<div style="font-size: 0.8rem; margin-top: 0.3rem; color: {theme["primary"]};">{f["ai_summary"][:100]}...</div>' if f.get('ai_summary') else ''}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="glass-card" style="text-align: center; padding: 2rem;">
+                <div style="font-size: 2rem;">📭</div>
+                <div style="opacity: 0.7;">{t('no_files')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def render_dashboard_view():
+    """Render Dashboard with statistics and charts"""
+    theme = get_theme()
+    
+    st.markdown(f"""
+    <div class="glass-card" style="text-align: center;">
+        <h2 style="color: {theme['primary']}; margin-bottom: 0.5rem;">{t('dashboard')}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get statistics
+    stats = get_nutrition_stats(st.session_state.history)
+    
+    # Stats cards
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; color: {theme['primary']};">{stats['avg_score']}</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">{t('avg_health_score')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; color: {theme['primary']};">{stats['total_scans']}</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">{t('total_scans')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        # Progress ring for safe products ratio
+        safe_ratio = (stats['safe_count'] / stats['total_scans'] * 100) if stats['total_scans'] > 0 else 0
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; color: #00ff88;">{stats['safe_count']}</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">{t('safe_products')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Product breakdown chart
+    if stats['total_scans'] > 0:
+        fig = go.Figure(data=[go.Pie(
+            labels=[t('safe_products'), t('warning_products'), t('danger_products')],
+            values=[stats['safe_count'], stats['warning_count'], stats['danger_count']],
+            hole=0.6,
+            marker_colors=['#00ff88', '#ffaa00', '#ff4444']
+        )])
+        fig.update_layout(
+            showlegend=True,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color=theme['text']),
+            margin=dict(t=20, b=20, l=20, r=20),
+            height=250
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Nutrition summary
+    st.markdown(f"<h3 style='color: {theme['primary']};'>{t('nutrition_summary')}</h3>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div style="font-size: 1.5rem;">🍞</div>
+            <div style="font-size: 1.2rem; color: {theme['primary']};">{stats['total_sugar']}g</div>
+            <div style="font-size: 0.75rem; opacity: 0.7;">{t('total_carbs')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div style="font-size: 1.5rem;">🧈</div>
+            <div style="font-size: 1.2rem; color: {theme['primary']};">{stats['total_fats']}g</div>
+            <div style="font-size: 0.75rem; opacity: 0.7;">{t('total_fats')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align: center;">
+            <div style="font-size: 1.5rem;">🧂</div>
+            <div style="font-size: 1.2rem; color: {theme['primary']};">{stats['total_sodium']}mg</div>
+            <div style="font-size: 0.75rem; opacity: 0.7;">{t('total_sodium')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Recent scans
+    st.markdown(f"<h3 style='color: {theme['primary']};'>{t('recent_scans')}</h3>", unsafe_allow_html=True)
+    for item in st.session_state.history[:5]:
+        score = item.get("health_score", 50)
+        color = "#00ff88" if score > 70 else "#ffaa00" if score > 40 else "#ff4444"
+        st.markdown(f"""
+        <div class="glass-card" style="padding: 0.8rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-weight: 500;">{item.get('name', 'Product')}</div>
+                <div style="color: {color}; font-weight: 600;">{score}/100</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Sync button placeholder
+    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+    if st.button(t('sync_records'), key="sync_btn", use_container_width=True):
+        st.info(t('sync_coming_soon'))
+
+def render_bottom_nav():
+    st.markdown("""
+    <style>
+        div[data-testid="column"] > div > div > div > div > button {
+            width: 100% !important;
+            border-radius: 12px !important;
+            padding: 8px !important;
+            font-size: 0.75rem !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        if st.button(t('nav_scan'), key="nav_scan_btn", use_container_width=True):
+            st.session_state.current_view = "scan"
+            st.rerun()
+    
+    with col2:
+        if st.button(t('nav_chat'), key="nav_chat_btn", use_container_width=True):
+            st.session_state.current_view = "chat"
+            st.rerun()
+    
+    with col3:
+        if st.button(t('nav_vault'), key="nav_vault_btn", use_container_width=True):
+            st.session_state.current_view = "vault"
+            st.rerun()
+    
+    with col4:
+        if st.button(t('dashboard'), key="nav_dash_btn", use_container_width=True):
+            st.session_state.current_view = "dashboard"
+            st.rerun()
+    
+    with col5:
+        if st.button(t('nav_about'), key="nav_about_btn", use_container_width=True):
+            st.session_state.current_view = "about"
+            st.rerun()
+
+def render_user_header():
+    theme = get_theme()
+    if st.session_state.logged_in:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"<p style='color: {theme['primary']};'>👤 {t('welcome')}, {st.session_state.username}!</p>", unsafe_allow_html=True)
+        with col2:
+            if st.button(t('logout'), key="logout_btn"):
+                st.session_state.logged_in = False
+                st.session_state.username = ""
+                st.session_state.user_id = None
+                st.session_state.current_view = "login"
+                st.session_state.chat_messages = []
+                st.session_state.history = []
+                st.session_state.medical_profile = {}
+                st.rerun()
+
+def render_footer():
+    """Render fixed footer with legal disclaimer and Palestinian branding"""
+    theme = get_theme()
+    st.markdown(f"""
+    <style>
+        .footer-disclaimer {{
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, transparent, rgba(0,0,0,0.95));
+            padding: 12px 20px 8px;
+            text-align: center;
+            font-size: 0.65rem;
+            color: {theme['text']}90;
+            z-index: 998;
+        }}
+        .footer-disclaimer .footer-flag {{
+            height: 3px;
+            background: linear-gradient(90deg, #000000 25%, #ffffff 25%, #ffffff 50%, #007a3d 50%, #007a3d 75%, #ee2244 75%);
+            margin-bottom: 8px;
+            border-radius: 2px;
+        }}
+    </style>
+    <div class="footer-disclaimer">
+        <div class="footer-flag"></div>
+        <div style="margin-bottom: 4px;">{t('footer_disclaimer')}</div>
+        <div style="opacity: 0.7; font-size: 0.6rem;">
+            © 2024-2025 Ali Riyad Faraj | 🇵🇸 Palestine | v{__version__}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- MAIN APP ---
+def main():
+    render_header()
+    render_language_selector()
+    
+    if not st.session_state.logged_in:
+        render_login_view()
+    else:
+        render_user_header()
+        render_theme_wheel()
+        
+        if st.session_state.current_view == "medical_history":
+            render_medical_history_view()
+        elif st.session_state.current_view == "scan":
+            render_scan_view()
+        elif st.session_state.current_view == "chat":
+            render_chat_view()
+        elif st.session_state.current_view == "history":
+            render_history_view()
+        elif st.session_state.current_view == "vault":
+            render_medical_vault_view()
+        elif st.session_state.current_view == "dashboard":
+            render_dashboard_view()
+        elif st.session_state.current_view == "about":
+            render_about_view()
+        
+        if st.session_state.current_view not in ["login", "medical_history"]:
+            render_bottom_nav()
+    
+    # Always render footer with legal disclaimer
+    render_footer()
+
+if __name__ == "__main__":
+    main()

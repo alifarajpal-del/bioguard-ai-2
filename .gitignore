@@ -1,0 +1,94 @@
+# BioGuard AI - .gitignore
+# Security: Protect sensitive data from being uploaded to GitHub
+
+# Database files (contain user data and medical records)
+*.db
+*.sqlite
+*.sqlite3
+bioguard.db
+
+# Environment files (contain API keys)
+.env
+.env.local
+.env.production
+*.env
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Uploaded medical files (privacy protection)
+uploads/
+medical_files/
+user_uploads/
+*.pdf
+*.xray
+*.dcm
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Test files
+.pytest_cache/
+.tox/
+nosetests.xml
