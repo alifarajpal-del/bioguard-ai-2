@@ -20,23 +20,164 @@ from services.engine import analyze_image_sync
 def _inject_camera_css() -> None:
     css = """
     <style>
-        /* Fullscreen scan stage */
-        .scan-stage { position: relative; width: 100vw; height: calc(100vh - 90px); margin-left: calc(-50vw + 50%); margin-top: -1.5rem; overflow: hidden; background: #000; }
-        .scan-stage [data-testid="stWebRtc"] { position: absolute; inset: 0; }
-        .scan-stage video { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 0 !important; }
-        .scan-overlay { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 100%); }
-        .hud-top { position: absolute; top: 18px; left: 18px; right: 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #fff; font-weight: 700; pointer-events: none; }
-        .pill { padding: 10px 14px; border-radius: 999px; backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
-        .pill.live { background: rgba(16,185,129,0.9); }
-        .pill.status { background: rgba(59,130,246,0.85); }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1.6s ease-in-out infinite; }
-        @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
-        .hud-bottom { position: absolute; bottom: 22px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 24px; pointer-events: none; }
-        .capture-btn { pointer-events: auto; width: 78px; height: 78px; border-radius: 50%; background: #fff; border: 6px solid #3b82f6; box-shadow: 0 12px 32px rgba(0,0,0,0.35); display:flex;align-items:center;justify-content:center; font-size: 28px; cursor: pointer; }
-        .capture-btn:active { transform: scale(0.95); }
-        .quick-action { pointer-events: auto; min-width: 82px; text-align: center; color: #e2e8f0; font-weight: 600; font-size: 13px; padding: 10px 12px; border-radius: 14px; background: rgba(0,0,0,0.55); box-shadow: 0 8px 24px rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.12); }
-        [data-testid="stWebRtc"] button { display: none !important; }
-        .scan-helper { margin-top: 0.25rem; color: #cbd5e1; text-align: center; font-size: 13px; }
+        /* iOS Native Camera - Full Screen */
+        .scan-stage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: calc(100vh - 80px);
+            z-index: 100;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        /* Force WebRTC container to fill */
+        .scan-stage [data-testid="stWebRtc"] {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1;
+        }
+        
+        /* Video element - cover entire screen */
+        .scan-stage video {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 0 !important;
+            transform: scaleX(-1); /* mirror for selfie */
+        }
+        
+        /* CRITICAL: Hide ALL default WebRTC controls */
+        [data-testid="stWebRtc"] button,
+        [data-testid="stWebRtc"] select,
+        .scan-stage button[kind],
+        .scan-stage button[type],
+        div[data-testid="stVerticalBlock"] > div > button {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        
+        /* Overlay gradient */
+        .scan-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.5) 100%);
+            z-index: 2;
+        }
+        
+        /* HUD Elements */
+        .hud-top {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #fff;
+            font-weight: 700;
+            pointer-events: none;
+            z-index: 3;
+        }
+        
+        .pill {
+            padding: 8px 14px;
+            border-radius: 999px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .pill.live { background: rgba(16,185,129,0.95); }
+        .pill.status { background: rgba(59,130,246,0.9); }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #fff;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* Bottom HUD */
+        .hud-bottom {
+            position: absolute;
+            bottom: 100px;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            pointer-events: none;
+            z-index: 3;
+        }
+        
+        .capture-btn {
+            pointer-events: auto;
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: #fff;
+            border: 5px solid rgba(255,255,255,0.3);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        
+        .capture-btn:active {
+            transform: scale(0.92);
+        }
+        
+        .quick-action {
+            pointer-events: auto;
+            min-width: 70px;
+            text-align: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        
+        .scan-helper {
+            position: absolute;
+            bottom: 60px;
+            left: 0;
+            right: 0;
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            font-size: 13px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            z-index: 3;
+        }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
