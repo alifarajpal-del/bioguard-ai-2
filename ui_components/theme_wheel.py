@@ -2,6 +2,7 @@
 
 from typing import Dict, Any
 import streamlit as st
+import random
 
 THEMES: Dict[str, Dict[str, str]] = {
     "ocean": {
@@ -94,10 +95,40 @@ def _inject_theme_css(theme: Dict[str, str]) -> None:
 
 def render_theme_wheel() -> None:
     st.markdown("### 🎨 Theme Wheel")
-
-    wheel_html = """
+    
+    # Initialize spin state
+    if "wheel_spinning" not in st.session_state:
+        st.session_state.wheel_spinning = False
+    
+    # Spinning animation CSS
+    spin_class = "spinning" if st.session_state.wheel_spinning else ""
+    
+    spin_css = """
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin 0.5s ease-out;
+        }
+        .wheel-button {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .wheel-button:hover {
+            transform: scale(1.05);
+        }
+        .wheel-button:active {
+            transform: scale(0.95);
+        }
+    </style>
+    """
+    st.markdown(spin_css, unsafe_allow_html=True)
+    
+    wheel_html = f"""
     <div style="display:flex;justify-content:center;align-items:center; margin: 24px 0;">
-        <div style="position:relative;width:260px;height:260px;border-radius:50%;
+        <div class="{spin_class}" style="position:relative;width:260px;height:260px;border-radius:50%;
                     background: conic-gradient(#3b82f6, #a78bfa, #22c55e, #f97316, #6366f1);
                     box-shadow:0 10px 30px rgba(0,0,0,0.18);">
             <div style="position:absolute;inset:32px;border-radius:50%;background: #ffffffee;
@@ -107,6 +138,24 @@ def render_theme_wheel() -> None:
     </div>
     """
     st.markdown(wheel_html, unsafe_allow_html=True)
+
+    # Interactive SPIN button
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🎰 SPIN THE WHEEL!", use_container_width=True, type="primary", key="spin_wheel"):
+            # Select random theme
+            theme_keys = list(THEMES.keys())
+            current = st.session_state.get("active_theme", "ocean")
+            # Ensure we get a different theme
+            available = [t for t in theme_keys if t != current]
+            new_theme = random.choice(available) if available else current
+            
+            st.session_state.active_theme = new_theme
+            st.toast(f"🎨 Switched to {THEMES[new_theme]['name']} theme!", icon="✨")
+            st.rerun()
+    
+    st.divider()
+    st.markdown("**Or choose manually:**")
 
     cols = st.columns(3)
     for idx, (key, data) in enumerate(THEMES.items()):
