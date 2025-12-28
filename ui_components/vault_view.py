@@ -92,7 +92,3 @@ def _files_list() -> None:
                 st.session_state.medical_history.pop(idx)
                 st.toast("🗑️ Document deleted", icon="✅")
                 st.rerun()
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
