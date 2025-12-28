@@ -8,113 +8,114 @@ def render_bottom_navigation():
     theme = get_current_theme()
     active_page = st.session_state.get("active_page", "home")
 
-    # Global CSS with haptic feedback
+    # iOS Dock Style CSS
     css = f"""
     <style>
-        /* Haptic feedback for all buttons */
-        button:active {{
-            transform: scale(0.95) !important;
-            box-shadow: inset 0 3px 5px rgba(0,0,0,0.2) !important;
-            transition: all 0.1s ease !important;
-        }}
-        
-        /* Fixed navigation container */
-        .fixed-nav {{
+        /* iOS Dock Container */
+        .nav-dock {{
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(255,255,255,0.98);
-            backdrop-filter: blur(16px);
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
-            z-index: 99999 !important;
-            padding: 8px 12px 16px 12px;
+            background: rgba(249, 249, 249, 0.94);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+            z-index: 99999;
+            padding: 8px 0 20px 0;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
         }}
         
-        /* Navigation button styling */
-        .fixed-nav [data-testid="column"] {{
-            padding: 0 4px !important;
+        /* Navigation buttons - iOS style */
+        .nav-dock [data-testid="column"] {{
+            padding: 0 !important;
         }}
         
-        .fixed-nav button {{
-            width: 100% !important;
-            padding: 12px 8px !important;
-            border-radius: 12px !important;
-            border: 2px solid transparent !important;
+        .nav-dock button {{
             background: transparent !important;
-            color: #64748b !important;
-            font-weight: 600 !important;
-            font-size: 11px !important;
-            transition: all 0.2s ease !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            gap: 4px !important;
+            border: none !important;
+            border-radius: 16px !important;
+            padding: 8px !important;
+            font-size: 28px !important;
+            line-height: 1 !important;
+            width: 100% !important;
+            color: #8e8e93 !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: none !important;
+            font-weight: 400 !important;
         }}
         
-        .fixed-nav button:hover {{
-            background: rgba(0,0,0,0.04) !important;
-            transform: translateY(-2px) !important;
+        .nav-dock button:hover {{
+            transform: scale(1.15) translateY(-4px) !important;
+            filter: brightness(1.1) !important;
         }}
         
-        /* Active state styling */
-        .fixed-nav button[data-active="true"] {{
-            color: {theme['primary']} !important;
-            background: {theme['primary']}12 !important;
-            border-color: {theme['primary']}33 !important;
-            box-shadow: 0 4px 12px {theme['primary']}25 !important;
+        .nav-dock button:active {{
+            transform: scale(0.92) !important;
+            transition: all 0.1s ease !important;
         }}
         
-        .nav-icon {{
-            font-size: 24px;
-            line-height: 1;
+        /* Active state - iOS blue */
+        .nav-dock button.active-nav {{
+            color: #007AFF !important;
+            background: rgba(0, 122, 255, 0.08) !important;
+            transform: scale(1.08) !important;
         }}
         
         .bottom-spacer {{
-            height: 85px;
+            height: 75px;
         }}
         
-        /* Ensure nav is always on top */
-        [data-testid="stVerticalBlock"] > div:has(div.fixed-nav) {{
-            z-index: 99999 !important;
+        /* Label under icon */
+        .nav-label {{
+            font-size: 10px;
+            color: #8e8e93;
+            font-weight: 500;
+            margin-top: 2px;
+            letter-spacing: -0.2px;
+        }}
+        
+        .nav-label.active {{
+            color: #007AFF;
         }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
 
-    # Create functional navigation with real Streamlit buttons
-    st.markdown('<div class="fixed-nav">', unsafe_allow_html=True)
-    cols = st.columns(4)
-    
-    nav_items = [
-        ("home", "🏡", "Home"),
-        ("scan", "🎥", "Scan"),
-        ("vault", "📦", "Vault"),
-        ("settings", "🛠️", "Settings"),
-    ]
-    
-    for col, (page, icon, label) in zip(cols, nav_items):
-        with col:
-            is_active = page == active_page
-            button_html = f'<div class="nav-icon">{icon}</div><div>{label}</div>'
-            if st.button(
-                button_html,
-                key=f"nav_{page}",
-                use_container_width=True,
-                type="secondary" if not is_active else "primary",
-            ):
-                st.session_state.active_page = page
-                st.rerun()
-            
-            # Mark active button with custom attribute via JS
-            if is_active:
+    # iOS Dock Navigation
+    nav_container = st.container()
+    with nav_container:
+        st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
+        cols = st.columns(4)
+        
+        nav_items = [
+            ("home", "🏡", "Home"),
+            ("scan", "🎥", "Scan"),
+            ("vault", "📦", "Vault"),
+            ("settings", "🛠️", "Settings"),
+        ]
+        
+        for col, (page, icon, label) in zip(cols, nav_items):
+            with col:
+                is_active = page == active_page
+                # Use plain emoji as button label - Streamlit will render it properly
+                if st.button(
+                    icon,
+                    key=f"nav_{page}",
+                    use_container_width=True,
+                ):
+                    st.session_state.active_page = page
+                    st.rerun()
+                
+                # Label below icon
+                label_class = "active" if is_active else ""
                 st.markdown(
-                    f'<script>document.querySelector("[data-testid=\\"baseButton-secondary\\"][key=\\"nav_{page}\\"]").setAttribute("data-active", "true");</script>',
+                    f'<div class="nav-label {label_class}" style="text-align:center;">{label}</div>',
                     unsafe_allow_html=True
                 )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def get_active_page() -> str:

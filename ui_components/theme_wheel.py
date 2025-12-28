@@ -96,45 +96,127 @@ def _inject_theme_css(theme: Dict[str, str]) -> None:
 def render_theme_wheel() -> None:
     st.markdown("### 🎨 Theme Wheel")
     
-    # Initialize spin state
+    # Initialize spin state and rotation
     if "wheel_spinning" not in st.session_state:
         st.session_state.wheel_spinning = False
+    if "wheel_rotation" not in st.session_state:
+        st.session_state.wheel_rotation = 0
     
-    # Spinning animation CSS
-    spin_class = "spinning" if st.session_state.wheel_spinning else ""
+    # Enhanced spinning animation CSS with tactile feel
+    current_rotation = st.session_state.wheel_rotation
     
-    spin_css = """
+    spin_css = f"""
     <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .spinning {
-            animation: spin 0.5s ease-out;
-        }
-        .wheel-button {
+        @keyframes spin {{
+            0% {{ transform: rotate({current_rotation}deg); }}
+            100% {{ transform: rotate({current_rotation + 720}deg); }}
+        }}
+        
+        @keyframes pulse {{
+            0%, 100% {{ transform: scale(1); }}
+            50% {{ transform: scale(1.05); }}
+        }}
+        
+        .wheel-container {{
+            perspective: 1000px;
+            margin: 30px 0;
+        }}
+        
+        .spinning {{
+            animation: spin 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }}
+        
+        .wheel-wrapper {{
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             cursor: pointer;
+            user-select: none;
+        }}
+        
+        .wheel-glow {{
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(59,130,246,0.3) 0%, transparent 70%);
+            filter: blur(20px);
+            animation: pulse 2s infinite;
+        }}
+        
+        .wheel-disc {{
+            position: relative;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: conic-gradient(
+                #3b82f6 0deg 60deg,
+                #a78bfa 60deg 120deg,
+                #22c55e 120deg 180deg,
+                #f97316 180deg 240deg,
+                #6366f1 240deg 300deg,
+                #ec4899 300deg 360deg
+            );
+            box-shadow: 
+                0 10px 40px rgba(0,0,0,0.2),
+                inset 0 0 30px rgba(255,255,255,0.2);
             transition: transform 0.2s ease;
-        }
-        .wheel-button:hover {
-            transform: scale(1.05);
-        }
-        .wheel-button:active {
-            transform: scale(0.95);
-        }
+        }}
+        
+        .wheel-disc:hover {{
+            transform: scale(1.02);
+            box-shadow: 
+                0 15px 50px rgba(0,0,0,0.25),
+                inset 0 0 35px rgba(255,255,255,0.3);
+        }}
+        
+        .wheel-center {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.15),
+                inset 0 -2px 8px rgba(0,0,0,0.1),
+                inset 0 2px 8px rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            user-select: none;
+        }}
+        
+        .wheel-disc:active {{
+            transform: scale(0.98);
+        }}
+        
+        .spin-hint {{
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 12px;
+            font-weight: 500;
+        }}
     </style>
     """
     st.markdown(spin_css, unsafe_allow_html=True)
     
+    spin_class = "spinning" if st.session_state.wheel_spinning else ""
+    
     wheel_html = f"""
-    <div style="display:flex;justify-content:center;align-items:center; margin: 24px 0;">
-        <div class="{spin_class}" style="position:relative;width:260px;height:260px;border-radius:50%;
-                    background: conic-gradient(#3b82f6, #a78bfa, #22c55e, #f97316, #6366f1);
-                    box-shadow:0 10px 30px rgba(0,0,0,0.18);">
-            <div style="position:absolute;inset:32px;border-radius:50%;background: #ffffffee;
-                        display:flex;align-items:center;justify-content:center;
-                        font-size:42px;font-weight:700;color:#0f172a;">Spin 🎡</div>
+    <div class="wheel-container">
+        <div class="wheel-wrapper">
+            <div class="wheel-glow"></div>
+            <div class="wheel-disc {spin_class}">
+                <div class="wheel-center">🎡</div>
+            </div>
         </div>
+        <div class="spin-hint">Click wheel or button to randomize theme ✨</div>
     </div>
     """
     st.markdown(wheel_html, unsafe_allow_html=True)
@@ -142,7 +224,7 @@ def render_theme_wheel() -> None:
     # Interactive SPIN button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🎰 SPIN THE WHEEL!", use_container_width=True, type="primary", key="spin_wheel"):
+        if st.button("🎲 SPIN & SURPRISE ME!", use_container_width=True, type="primary", key="spin_wheel"):
             # Select random theme
             theme_keys = list(THEMES.keys())
             current = st.session_state.get("active_theme", "ocean")
@@ -150,8 +232,13 @@ def render_theme_wheel() -> None:
             available = [t for t in theme_keys if t != current]
             new_theme = random.choice(available) if available else current
             
+            # Update rotation
+            st.session_state.wheel_rotation += 720
+            st.session_state.wheel_spinning = True
+            
             st.session_state.active_theme = new_theme
             st.toast(f"🎨 Switched to {THEMES[new_theme]['name']} theme!", icon="✨")
+            st.balloons()
             st.rerun()
     
     st.divider()
