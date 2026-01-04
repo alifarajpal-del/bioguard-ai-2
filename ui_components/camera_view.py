@@ -21,6 +21,7 @@ except ImportError:
 from services.engine import analyze_image_sync
 from services.live_vision import get_live_vision_service
 from services.barcode_scanner import get_barcode_scanner
+from services.recommendations import get_recommendations_service
 from database.db_manager import get_db_manager
 from config.settings import DETECTION_FPS, SUPPORTED_LANGUAGES
 
@@ -472,8 +473,78 @@ def render_camera_view() -> None:
                 # Suggest alternatives if score is low
                 if score < 70:
                     with st.expander(messages['alternatives']):
-                        st.info(messages['alternatives_message'])
-                        # TODO: Implement alternative products suggestion
+                        # Get healthier alternatives
+                        try:
+                            recommendations_service = get_recommendations_service()
+                            product_name = result.get('product', 'Unknown')
+                            category = result.get('category')
+                            
+                            # Get user profile for personalized recommendations
+                            username = st.session_state.get('username')
+                            user_profile = {}
+                            if username:
+                                db = get_db_manager()
+                                user_data = db.get_user_profile(username)
+                                if user_data:
+                                    user_profile = {
+                                        'allergies': user_data.get('allergies', []),
+                                        'health_conditions': user_data.get('health_conditions', [])
+                                    }
+                            
+                            # Get alternatives
+                            if user_profile:
+                                alternatives = recommendations_service.get_personalized_alternatives(
+                                    product_name,
+                                    score,
+                                    user_profile,
+                                    category,
+                                    limit=5
+                                )
+                            else:
+                                alternatives = recommendations_service.get_healthier_alternatives(
+                                    product_name,
+                                    score,
+                                    category,
+                                    limit=5
+                                )
+                            
+                            if alternatives:
+                                st.success(f"✨ {messages.get('found_alternatives', 'Found')} {len(alternatives)} {messages.get('healthier_options', 'healthier options')}:")
+                                
+                                for i, alt in enumerate(alternatives, 1):
+                                    with st.container():
+                                        col_alt1, col_alt2 = st.columns([3, 1])
+                                        
+                                        with col_alt1:
+                                            st.markdown(f"**{i}. {alt['product']}**")
+                                            if alt.get('brand'):
+                                                st.caption(f"🏷️ {alt['brand']}")
+                                            
+                                            # Show reason
+                                            if alt.get('reason'):
+                                                st.caption(f"📊 {alt['reason']}")
+                                            
+                                            # Show personalized note
+                                            if alt.get('personalized_note'):
+                                                st.caption(alt['personalized_note'])
+                                        
+                                        with col_alt2:
+                                            # Health score badge
+                                            alt_score = alt.get('health_score', 0)
+                                            if alt_score >= 80:
+                                                st.success(f"**{alt_score}**")
+                                            elif alt_score >= 60:
+                                                st.info(f"**{alt_score}**")
+                                            else:
+                                                st.warning(f"**{alt_score}**")
+                                        
+                                        st.divider()
+                            else:
+                                st.info(messages['alternatives_message'])
+                        
+                        except Exception as e:
+                            st.error(f"Error fetching alternatives: {str(e)}")
+                            st.info(messages['alternatives_message'])
                 
             # Clear pending frame
             del st.session_state.pending_analysis_frame
@@ -556,6 +627,8 @@ def _get_ui_messages(language: str = 'ar') -> Dict[str, str]:
             'scanned_image': 'الصورة الممسوحة',
             'alternatives': 'بدائل صحية',
             'alternatives_message': 'نوصي بالبحث عن منتجات ذات درجة صحية أعلى من نفس الفئة',
+            'found_alternatives': 'وجدنا',
+            'healthier_options': 'خيارات أصح',
             'manual_capture': 'التقاط يدوي',
             'product_detected': 'تم اكتشاف منتج',
             'no_detection': 'لم يتم اكتشاف منتج. حاول توجيه الكاميرا بشكل أفضل',
@@ -585,6 +658,8 @@ def _get_ui_messages(language: str = 'ar') -> Dict[str, str]:
             'scanned_image': 'Scanned Image',
             'alternatives': 'Healthy Alternatives',
             'alternatives_message': 'We recommend looking for products with higher health scores in the same category',
+            'found_alternatives': 'Found',
+            'healthier_options': 'healthier options',
             'manual_capture': 'Manual Capture',
             'product_detected': 'Product detected',
             'no_detection': 'No product detected. Try repositioning camera',
@@ -613,8 +688,8 @@ def _get_ui_messages(language: str = 'ar') -> Dict[str, str]:
             'ingredients': 'Ingrédients',
             'scanned_image': 'Image Scannée',
             'alternatives': 'Alternatives Saines',
-            'alternatives_message': 'Nous recommandons de chercher des produits avec de meilleurs scores santé dans la même catégorie',
-            'manual_capture': 'Capture Manuelle',
+            'alternatives_message': 'Nous recommandons de chercher des produits avec de meilleurs scores santé dans la même catégorie',            'found_alternatives': 'Trouvé',
+            'healthier_options': 'options plus saines',            'manual_capture': 'Capture Manuelle',
             'product_detected': 'Produit détecté',
             'no_detection': 'Aucun produit détecté. Essayez de repositionner la caméra',
             'camera_not_ready': 'Caméra pas prête',

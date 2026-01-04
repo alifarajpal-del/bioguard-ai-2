@@ -31,3 +31,6 @@ tqdm>=4.66.0
 pyzbar>=0.1.9  # Barcode scanning
 pytesseract>=0.3.10  # OCR text extraction
 av>=10.0.0  # Video processing for WebRTC
+
+# Security & Encryption
+cryptography>=41.0.5  # Data encryption (Fernet)

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  bioguard-ai:
+    build: .
+    container_name: bioguard-ai
+    ports:
+      - "8501:8501"
+    environment:
+      - ENVIRONMENT=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TRANSLATION_API_KEY=${TRANSLATION_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-ar}
+      - MAX_API_CALLS_PER_MINUTE=60
+      - CACHE_TTL_SECONDS=7200
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    networks:
+      - bioguard-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis cache for performance
+  redis:
+    image: redis:7-alpine
+    container_name: bioguard-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - bioguard-network
+    command: redis-server --appendonly yes
+
+networks:
+  bioguard-network:
+    driver: bridge
+
+volumes:
+  redis-data:

@@ -1,0 +1,31 @@
+# Docker Compose for Development Environment
+version: '3.8'
+
+services:
+  bioguard-ai-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bioguard-ai-dev
+    ports:
+      - "8501:8501"
+    environment:
+      - ENVIRONMENT=development
+      - JWT_SECRET_KEY=dev-secret-key-not-for-production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEFAULT_LANGUAGE=en
+      - MAX_API_CALLS_PER_MINUTE=100
+      - DETECTION_FPS=3
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - bioguard-dev-network
+    command: streamlit run main.py --server.runOnSave=true --server.fileWatcherType=poll
+
+networks:
+  bioguard-dev-network:
+    driver: bridge
