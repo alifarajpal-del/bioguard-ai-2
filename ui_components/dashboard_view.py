@@ -1,4 +1,7 @@
-"""Dashboard view with charts and stats."""
+"""
+Dashboard view with charts and stats.
+Displays health metrics, activity feed, and data visualizations.
+"""
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -7,6 +10,7 @@ from datetime import datetime, timedelta
 
 
 def render_dashboard() -> None:
+    """Render main dashboard with all components."""
     st.markdown("## 🏠 Home Dashboard")
     _quick_stats()
     st.divider()
@@ -20,6 +24,7 @@ def render_dashboard() -> None:
 
 
 def _quick_stats() -> None:
+    """Display quick statistics cards in a 4-column layout."""
     cols = st.columns(4)
     stats = [
         ("📊 Health Score", "85", "+4 vs last week", "#10b981"),
@@ -43,6 +48,7 @@ def _quick_stats() -> None:
 
 
 def _health_score_trend() -> None:
+    """Display health score trend chart over last 14 days."""
     st.markdown("### 📈 Health Score")
     dates = pd.date_range(end=datetime.now(), periods=14, freq="D")
     scores = [72 + i % 6 + (i * 0.6) for i in range(len(dates))]
@@ -53,6 +59,7 @@ def _health_score_trend() -> None:
 
 
 def _safety_breakdown() -> None:
+    """Display pie chart showing distribution of safety verdicts."""
     st.markdown("### 🥧 Safety Breakdown")
     labels = ["Safe", "Warning", "Danger"]
     values = [128, 11, 3]
@@ -63,6 +70,7 @@ def _safety_breakdown() -> None:
 
 
 def _activity_feed() -> None:
+    """Display recent food analysis activity feed."""
     st.markdown("### 📋 Recent Activity")
     items = [
         {"time": "2h", "item": "Organic Oats", "status": "✅ Safe", "score": 92},

@@ -1,6 +1,12 @@
 """
-Hybrid Storage Manager: SQLite + Vector DB + Graph Nodes.
-Provides encrypted data persistence and efficient querying.
+Hybrid Storage Manager: SQLite + ChromaDB + NetworkX.
+
+This module manages a three-tier database architecture:
+- SQLite: Structured relational data (users, analysis history, medical files)
+- ChromaDB: Vector embeddings for semantic search and similarity queries
+- NetworkX: Knowledge graph for ingredient-health relationship mapping
+
+Provides encrypted data persistence and efficient querying across all tiers.
 """
 
 import sqlite3
@@ -23,10 +29,10 @@ from config.settings import (
 
 
 class DBManager:
-    """Unified database manager for hybrid storage."""
+    """Unified database manager for hybrid storage architecture."""
     
     def __init__(self):
-        """Initialize all database backends."""
+        """Initialize all database backends (SQLite, ChromaDB, NetworkX)."""
         self.db_path = DATABASE_PATH
         self.vector_db_path = VECTOR_DB_PATH
         self.graph_db_path = GRAPH_DB_PATH
@@ -34,7 +40,7 @@ class DBManager:
         # Initialize SQLite
         self._init_sqlite()
         
-        # Initialize Vector DB (Chroma)
+        # Initialize Vector DB (Chroma) - for semantic search
         if chromadb:
             self.chroma_client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
             self.food_collection = self.chroma_client.get_or_create_collection(
@@ -44,7 +50,7 @@ class DBManager:
             self.chroma_client = None
             self.food_collection = None
         
-        # Initialize Graph DB (NetworkX)
+        # Initialize Graph DB (NetworkX) - for relationship mapping
         self._init_graph()
     
     def _init_sqlite(self):
@@ -68,12 +74,12 @@ class DBManager:
             )
         """)
         
-        # Food Analysis History
+        # Food Analysis History - Updated schema with numeric types
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS food_analysis (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT,
-                product_name TEXT,
+                product TEXT,
                 health_score INTEGER,
                 nova_score INTEGER,
                 verdict TEXT,
@@ -111,7 +117,7 @@ class DBManager:
         conn.close()
     
     def _init_graph(self):
-        """Initialize knowledge graph."""
+        """Initialize knowledge graph for ingredient-health relationships."""
         self.graph = nx.DiGraph()
         
         # Pre-populate with common health relationships
@@ -121,7 +127,12 @@ class DBManager:
         os.makedirs(self.graph_db_path, exist_ok=True)
     
     def _populate_health_graph(self):
-        """Populate the knowledge graph with health relationships."""
+        """
+        Populate the knowledge graph with common ingredient-health relationships.
+        
+        Each edge represents a connection between an ingredient and a health condition,
+        with metadata for relationship type and severity level.
+        """
         # Ingredient -> Health Impact relationships
         conflicts = [
             ("sodium", "hypertension", "increases_risk", "high"),
@@ -145,7 +156,15 @@ class DBManager:
             )
     
     def save_user(self, user_data: Dict[str, Any]) -> bool:
-        """Save or update user profile."""
+        """
+        Save or update user profile in SQLite database.
+        
+        Args:
+            user_data: Dictionary containing user information (user_id, name, age, etc.)
+            
+        Returns:
+            True if successful, False otherwise
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -176,7 +195,15 @@ class DBManager:
             return False
     
     def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve user profile."""
+        """
+        Retrieve user profile from database.
+        
+        Args:
+            user_id: Unique user identifier
+            
+        Returns:
+            User data dictionary or None if not found
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -202,20 +229,39 @@ class DBManager:
             return None
     
     def save_food_analysis(self, user_id: str, analysis_data: Dict[str, Any]) -> bool:
-        """Save food analysis result to history."""
+        """
+        Save food analysis result to history with proper typing.
+        
+        Args:
+            user_id: User identifier
+            analysis_data: Analysis results containing product, health_score, nova_score, etc.
+            
+        Returns:
+            True if successful, False otherwise
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Extract numeric values properly
+            health_score = analysis_data.get('health_score', 0)
+            nova_score = analysis_data.get('nova_score', 0)
+            
+            # Ensure numeric types
+            if isinstance(health_score, str):
+                health_score = int(health_score) if health_score.isdigit() else 0
+            if isinstance(nova_score, str):
+                nova_score = int(nova_score) if nova_score.isdigit() else 0
+            
             cursor.execute("""
                 INSERT INTO food_analysis 
-                (user_id, product_name, health_score, nova_score, verdict, raw_data, created_at)
+                (user_id, product, health_score, nova_score, verdict, raw_data, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id,
-                analysis_data.get('name', 'Unknown'),
-                analysis_data.get('health_score', 0),
-                analysis_data.get('nova_score', 0),
+                analysis_data.get('product', 'Unknown'),  # Changed from 'name' to 'product'
+                int(health_score),  # Ensure INTEGER type
+                int(nova_score),    # Ensure INTEGER type
                 analysis_data.get('verdict', 'UNKNOWN'),
                 json.dumps(analysis_data),
                 datetime.utcnow().isoformat(),
@@ -234,13 +280,20 @@ class DBManager:
             return False
     
     def _add_to_vector_db(self, analysis_data: Dict[str, Any]):
-        """Add food analysis to vector database for semantic search."""
+        """
+        Add food analysis to ChromaDB vector database for semantic search.
+        
+        Args:
+            analysis_data: Analysis results to be embedded and stored
+        """
         try:
             if not self.food_collection:
                 return
             
+            product_name = analysis_data.get('product', analysis_data.get('name', 'Unknown'))
+            
             text_content = f"""
-            Product: {analysis_data.get('name', 'Unknown')}
+            Product: {product_name}
             Health Score: {analysis_data.get('health_score', 0)}
             Ingredients: {', '.join(analysis_data.get('ingredients', []))}
             Warnings: {', '.join(analysis_data.get('warnings', []))}
@@ -248,14 +301,14 @@ class DBManager:
             """
             
             doc_id = hashlib.md5(
-                f"{analysis_data.get('name', 'Unknown')}-{datetime.utcnow()}".encode()
+                f"{product_name}-{datetime.utcnow()}".encode()
             ).hexdigest()
             
             self.food_collection.add(
                 ids=[doc_id],
                 documents=[text_content],
                 metadatas=[{
-                    'product_name': analysis_data.get('name', 'Unknown'),
+                    'product': product_name,  # Changed from 'product_name' for consistency
                     'health_score': analysis_data.get('health_score', 0),
                     'verdict': analysis_data.get('verdict', 'UNKNOWN'),
                 }]
@@ -264,13 +317,22 @@ class DBManager:
             print(f"⚠️ Warning: Could not add to vector DB: {e}")
     
     def get_user_history(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Retrieve user's food analysis history."""
+        """
+        Retrieve user's food analysis history with updated column names.
+        
+        Args:
+            user_id: User identifier
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of analysis history records
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT product_name, health_score, nova_score, verdict, created_at
+                SELECT product, health_score, nova_score, verdict, created_at
                 FROM food_analysis
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -282,7 +344,7 @@ class DBManager:
             
             return [
                 {
-                    'product_name': row[0],
+                    'product': row[0],  # Changed from 'product_name' to 'product'
                     'health_score': row[1],
                     'nova_score': row[2],
                     'verdict': row[3],
@@ -295,7 +357,19 @@ class DBManager:
             return []
     
     def find_conflicts_in_graph(self, ingredients: List[str], medical_conditions: List[str]) -> List[Dict[str, Any]]:
-        """Query knowledge graph for ingredient-health conflicts."""
+        """
+        Query knowledge graph for ingredient-health conflicts.
+        
+        Searches the NetworkX graph for edges connecting user's ingredients
+        to their medical conditions, identifying potential health risks.
+        
+        Args:
+            ingredients: List of food ingredients to check
+            medical_conditions: List of user's health conditions
+            
+        Returns:
+            List of conflict dictionaries with ingredient, condition, relationship, and severity
+        """
         conflicts = []
         
         for ingredient in ingredients:
@@ -318,7 +392,17 @@ class DBManager:
         return conflicts
     
     def save_federated_update(self, client_id: str, model_weights: Dict[str, Any], accuracy: float):
-        """Save federated learning model update."""
+        """
+        Save federated learning model update to database.
+        
+        Args:
+            client_id: Unique client/device identifier
+            model_weights: Model parameters as dictionary
+            accuracy: Training accuracy score
+            
+        Returns:
+            True if successful, False otherwise
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -341,7 +425,7 @@ class DBManager:
             return False
     
     def clear_cache(self):
-        """Clear in-memory caches."""
+        """Clear in-memory caches (ChromaDB manages its own cache)."""
         if self.chroma_client and CACHE_ENABLED:
             pass  # Chroma handles its own cache
 
@@ -351,7 +435,12 @@ db_manager = None
 
 
 def get_db_manager() -> DBManager:
-    """Get or create global database manager instance."""
+    """
+    Get or create global database manager instance (singleton pattern).
+    
+    Returns:
+        Global DBManager instance
+    """
     global db_manager
     if db_manager is None:
         db_manager = DBManager()

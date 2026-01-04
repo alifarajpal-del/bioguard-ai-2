@@ -13,7 +13,21 @@ DEBUG = ENVIRONMENT == "development"
 # ============== API Keys & Secrets ==============
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+
+# JWT Secret Key - MUST be set in production
+_jwt_secret = os.getenv("JWT_SECRET_KEY")
+if not _jwt_secret:
+    if ENVIRONMENT == "production":
+        raise ValueError(
+            "JWT_SECRET_KEY environment variable must be set in production. "
+            "Generate a secure key using: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        )
+    else:
+        # Development fallback
+        _jwt_secret = "dev-secret-key-not-for-production"
+        print("⚠️ Warning: Using development JWT secret. Set JWT_SECRET_KEY for production.")
+
+JWT_SECRET_KEY = _jwt_secret
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -213,6 +227,19 @@ LOCAL_EPOCHS = 5
 BATCH_SIZE = 32
 LEARNING_RATE = 0.001
 
+# ============== Environment-Specific Settings ==============
+if ENVIRONMENT == "production":
+    MAX_API_CALLS_PER_MINUTE = int(os.getenv("MAX_API_CALLS_PER_MINUTE", "60"))
+    CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+    CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "7200"))  # 2 hours in production
+    MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+else:
+    # Development settings - more permissive
+    MAX_API_CALLS_PER_MINUTE = int(os.getenv("MAX_API_CALLS_PER_MINUTE", "100"))
+    CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+    CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "1800"))  # 30 minutes in dev
+    MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
+
 # ============== Language Support ==============
 SUPPORTED_LANGUAGES = {
     "en": "English",
@@ -228,16 +255,15 @@ os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
 # ============== Feature Flags ==============
 FEATURE_FLAGS = {
-    "live_ar_enabled": True,
-    "knowledge_graph_enabled": True,
-    "digital_twin_enabled": True,
+    "live_ar_enabled": os.getenv("FEATURE_LIVE_AR_ENABLED", "true").lower() == "true",
+    "knowledge_graph_enabled": os.getenv("FEATURE_KNOWLEDGE_GRAPH_ENABLED", "true").lower() == "true",
+    "digital_twin_enabled": os.getenv("FEATURE_DIGITAL_TWIN_ENABLED", "true").lower() == "true",
     "federated_learning_enabled": FEDERATED_LEARNING_ENABLED,
-    "spectral_analysis_enabled": True,
+    "spectral_analysis_enabled": os.getenv("FEATURE_SPECTRAL_ANALYSIS_ENABLED", "true").lower() == "true",
 }
 
 # ============== Rate Limiting ==============
-MAX_API_CALLS_PER_MINUTE = 30
-MAX_FILE_SIZE_MB = 10
+# Note: MAX_API_CALLS_PER_MINUTE is set above based on environment
 
 # ============== Health Score Thresholds ==============
 HEALTH_SCORE_THRESHOLDS = {
@@ -247,8 +273,7 @@ HEALTH_SCORE_THRESHOLDS = {
 }
 
 # ============== Cache Configuration ==============
-CACHE_ENABLED = True
-CACHE_TTL_SECONDS = 3600  # 1 hour
+# Note: CACHE_ENABLED and CACHE_TTL_SECONDS are set above based on environment
 
 # ============== WebRTC Configuration ==============
 WEBRTC_CLIENT_TYPE = "webrtc"

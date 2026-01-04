@@ -69,18 +69,33 @@ cd bioguard-ai
 # Install dependencies
 pip install -r requirements.txt
 
-# Set up environment variables
-# Create .env file with:
-OPENAI_API_KEY=your_api_key_here
+# Set up environment variables (IMPORTANT!)
+cp .env.example .env
+# Edit .env and add your API keys (see SECURITY_SETUP.md)
+
+# Generate JWT secret for production
+python -c 'import secrets; print(secrets.token_urlsafe(32))'
+# Add the output to JWT_SECRET_KEY in .env
 
 # Run the application
-streamlit run app.py
+streamlit run main.py
 ```
 
+### ⚠️ Security Note | ملاحظة أمنية
+**Never commit sensitive data to git!** See [SECURITY_SETUP.md](SECURITY_SETUP.md) for detailed configuration guide.
+
+All API keys and secrets must be set via environment variables. The application will:
+- Raise an error if `JWT_SECRET_KEY` is missing in production
+- Show warnings when using development defaults
+- Fall back to mock AI responses if API keys are not configured
+
 ### For Streamlit Cloud | للنشر على Streamlit Cloud
-Create `.streamlit/secrets.toml`:
+Add to your Streamlit Cloud secrets (Settings → Secrets):
 ```toml
-OPENAI_API_KEY = "your_api_key_here"
+OPENAI_API_KEY = "sk-your-actual-key"
+GEMINI_API_KEY = "your-actual-key"
+JWT_SECRET_KEY = "your-generated-secret"
+ENVIRONMENT = "production"
 ```
 
 ---
