@@ -245,8 +245,14 @@ SUPPORTED_LANGUAGES = {
     "en": "English",
     "ar": "العربية",
     "fr": "Français",
+    "es": "Español",
+    "de": "Deutsch",
 }
-DEFAULT_LANGUAGE = "en"
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "ar")
+
+# ============== Auto-Translation ==============
+AUTO_TRANSLATE_RESULTS = os.getenv("AUTO_TRANSLATE_RESULTS", "true").lower() == "true"
+TRANSLATION_API_KEY = os.getenv("TRANSLATION_API_KEY", "")  # Google Translate API key
 
 # ============== Logging Configuration ==============
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

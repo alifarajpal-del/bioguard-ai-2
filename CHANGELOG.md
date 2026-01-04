@@ -1,11 +1,278 @@
-# 🎯 BioGuard AI v2.1 - Update Summary
+# 🎯 BioGuard AI v2.2 - LiveVision Integration Update
+
+## Executive Overview
+Major feature release introducing real-time computer vision capabilities, barcode scanning, OCR text extraction, and comprehensive multilingual support. This update transforms BioGuard AI into a continuous scanning system with AR overlays.
+
+---
+
+## 🆕 New Features
+
+### 1. 🎥 LiveVision Real-Time Scanner
+**New Service:** `services/live_vision.py` (Updated from v2.1)
+
+**Capabilities:**
+- **Continuous Scanning**: Auto-detection at 1-3 FPS (configurable)
+- **YOLO Object Detection**: Real-time product identification
+- **Smart Cooldown**: 3-second delay between auto-analyses
+- **AR Overlays**: Detection boxes with confidence scores
+- **Session State Management**: Tracks scan history and status
+
+**Integration:**
+- WebRTC video streaming via streamlit-webrtc
+- Frame processing in `LiveVisionProcessor` class
+- Auto-triggers AI analysis when objects detected
+
+### 2. 📱 Barcode Scanner Service
+**New File:** `services/barcode_scanner.py` (330 lines)
+
+**Capabilities:**
+- **Multi-format Support**: EAN13, UPC-A, Code128, QR codes
+- **OpenFoodFacts API**: Automatic product lookup by barcode
+- **Caching System**: 1-hour cache for repeated scans
+- **Fallback Mode**: Works without internet (cached data)
+
+**Key Methods:**
+```python
+scan_barcode(image) -> Dict[str, Any]
+_lookup_barcode(barcode) -> Dict[str, Any]
+_query_openfoodfacts(barcode) -> Dict[str, Any]
+```
+
+**API Integration:**
+```
+GET https://world.openfoodfacts.org/api/v0/product/{barcode}.json
+Returns: product_name, brands, nutriments, ingredients
+```
+
+### 3. 🔤 OCR Text Extraction
+**Extended:** `services/barcode_scanner.py`
+
+**Capabilities:**
+- **Tesseract Integration**: English and Arabic text recognition
+- **Image Preprocessing**: Adaptive threshold, denoising, upscaling
+- **Nutrition Label Parsing**: Regex extraction of 7 nutrients
+  - Calories
+  - Protein
+  - Carbohydrates
+  - Fat
+  - Sodium
+  - Sugar
+  - Fiber
+- **Ingredients List Extraction**: Automatic parsing from OCR text
+
+**Key Methods:**
+```python
+extract_text_ocr(image) -> str
+parse_nutrition_label(text) -> Dict[str, Any]
+extract_ingredients_list(text) -> List[str]
+```
+
+### 4. 🌍 Translation Service
+**New File:** `services/translation.py` (200+ lines)
+
+**Capabilities:**
+- **Google Translate API**: High-quality translations
+- **Fallback Dictionary**: 50+ common food/health terms in 5 languages
+- **Result Translation**: Auto-translate analysis results
+- **Caching**: In-memory cache for repeated translations
+
+**Supported Languages:**
+- Arabic (ar) - العربية
+- English (en)
+- French (fr) - Français
+- Spanish (es) - Español
+- German (de) - Deutsch
+
+**Key Methods:**
+```python
+translate_text(text, target_language) -> str
+translate_analysis_result(result, target_language) -> Dict
+_translate_with_google() -> str
+_translate_simple() -> str
+```
+
+### 5. 📸 Enhanced Camera View UI
+**Heavily Modified:** `ui_components/camera_view.py` (450+ lines)
+
+**New Components:**
+
+#### LiveVisionProcessor Class
+```python
+class LiveVisionProcessor(VideoProcessorBase):
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        # Process frame at DETECTION_FPS
+        # Run YOLO detection
+        # Auto-trigger analysis with cooldown
+        # Draw AR overlays
+```
+
+#### Session State Management
+- `scan_status`: "searching" | "detected" | "analyzing" | "complete"
+- `last_barcode`: Cached barcode data
+- `analysis_history`: Last 5 scans
+- `language`: User-selected language
+
+#### Multilingual UI Messages
+**23 translated strings in 5 languages:**
+- Status indicators (searching, detected, analyzing)
+- Instructions (hold_steady, flash_tip)
+- Results (product_found, health_conflicts)
+- Tips (guide_barcode, guide_label, guide_ingredients)
+
+**Function:** `_get_ui_messages(language: str) -> Dict[str, str]`
+
+#### Dynamic HUD
+- **Progress Ring**: Animated ring during analysis
+- **Detection Boxes**: Green boxes around detected objects
+- **Status Messages**: Real-time feedback in selected language
+- **Barcode Display**: Shows barcode number when detected
+- **Flash Toggle**: Button to enable device flash (device-dependent)
+
+#### Enhanced Fallback Mode
+**When WebRTC unavailable:**
+- Upload image interface
+- Automatic barcode scanning
+- OCR text extraction
+- Nutrition parsing
+- Ingredients extraction
+- Multilingual tips and guides
+
+---
+
+## 🔧 Configuration Updates
+
+### Extended Language Support
+**File:** `config/settings.py`
+
+**Before (v2.1):**
+```python
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "ar": "العربية",
+    "fr": "Français",
+}
+DEFAULT_LANGUAGE = "en"
+```
+
+**After (v2.2):**
+```python
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "ar": "العربية",
+    "fr": "Français",
+    "es": "Español",  # NEW
+    "de": "Deutsch",   # NEW
+}
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "ar")  # Env-configurable
+```
+
+### New Vision Settings
+```python
+# Vision Processing
+DETECTION_FPS = int(os.getenv("DETECTION_FPS", "2"))  # 1-3 recommended
+ANALYSIS_COOLDOWN = int(os.getenv("ANALYSIS_COOLDOWN", "3"))  # seconds
+
+# Translation
+AUTO_TRANSLATE_RESULTS = os.getenv("AUTO_TRANSLATE_RESULTS", "true").lower() == "true"
+TRANSLATION_API_KEY = os.getenv("TRANSLATION_API_KEY", "")
+
+# Tesseract OCR (Windows path override)
+TESSERACT_CMD = os.getenv("TESSERACT_CMD", "tesseract")
+```
+
+---
+
+## 📦 Dependencies
+
+### New Requirements
+**File:** `requirements.txt`
+
+```python
+# LiveVision Integration Dependencies
+pyzbar>=0.1.9           # Barcode scanning
+pytesseract>=0.3.10     # OCR text extraction
+av>=10.0.0              # Video processing for WebRTC
+```
+
+### System Dependencies
+- **Tesseract OCR**: Required for text extraction
+  - Windows: `choco install tesseract`
+  - Linux: `sudo apt-get install tesseract-ocr tesseract-ocr-ara`
+  - macOS: `brew install tesseract tesseract-lang`
+  
+- **libzbar**: Required for barcode scanning
+  - Windows: `conda install -c conda-forge zbar`
+  - Linux: `sudo apt-get install libzbar0`
+  - macOS: `brew install zbar`
+
+---
+
+## 🛠️ New Tools
+
+### Automated Setup Script
+**New File:** `setup_livevision.py` (300+ lines)
+
+**Capabilities:**
+- Checks Python version (3.8+ required)
+- Verifies Tesseract installation
+- Checks libzbar availability
+- Installs Python packages from requirements.txt
+- Creates .env from .env.example
+- Validates environment variables
+- Creates required directories
+- Checks YOLO model file
+- Provides platform-specific installation instructions
+
+**Usage:**
+```bash
+python setup_livevision.py
+```
+
+**Output:**
+- ✅ Success messages for installed components
+- ⚠️ Warnings for missing dependencies
+- 📋 Installation instructions for missing system packages
+
+---
+
+## 📚 Documentation
+
+### New Documentation Files
+
+#### 1. LIVEVISION_INTEGRATION.md (800+ lines)
+**Comprehensive guide covering:**
+- Features overview (6 major features)
+- Technical architecture (file-by-file breakdown)
+- Installation instructions (3 platforms)
+- Configuration guide (.env setup)
+- Usage examples (automatic, manual, fallback modes)
+- UI components reference
+- Troubleshooting section (4 common issues)
+- Performance optimization tips
+- Security considerations
+- Testing checklist (10 items)
+- Future enhancements (6 pending features)
+- API references (OpenFoodFacts, Google Translate)
+
+#### 2. README.md Updates
+**Added sections:**
+- LiveVision feature description
+- System dependencies prerequisites
+- setup_livevision.py usage
+- Link to LIVEVISION_INTEGRATION.md
+- Updated tech stack table (3 new technologies)
+- Updated project structure (6 new files)
+
+---
+
+## 🎯 BioGuard AI v2.1 - Security & Performance Update
 
 ## Executive Overview
 Comprehensive security, performance, and maintainability improvements across the BioGuard AI codebase.
 
 ---
 
-## 🔐 Security Enhancements
+## 🔐 Security Enhancements (v2.1)
 
 ### 1. JWT Secret Key Management
 **File:** `config/settings.py`

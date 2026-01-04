@@ -26,3 +26,8 @@ python-dateutil>=2.8.0
 pytz>=2023.3
 loguru>=0.7.0
 tqdm>=4.66.0
+
+# LiveVision Integration Dependencies
+pyzbar>=0.1.9  # Barcode scanning
+pytesseract>=0.3.10  # OCR text extraction
+av>=10.0.0  # Video processing for WebRTC

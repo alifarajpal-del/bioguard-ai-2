@@ -19,8 +19,17 @@
 
 ## 🌟 Features | المميزات
 
+### 🎥 LiveVision Real-Time Scanner | ماسح الرؤية الحية **NEW!**
+- **Continuous Scanning**: Auto-detection and analysis (no manual capture needed)
+- **Barcode Reader**: Instant product lookup via OpenFoodFacts API
+- **OCR Text Extraction**: Read nutrition labels and ingredients
+- **AR Overlay HUD**: Real-time detection boxes and status indicators
+- **Health Conflict Detection**: Cross-reference with user profile
+- **Multilingual Support**: 5 languages (Arabic, English, French, Spanish, German)
+- **Auto-Translation**: AI-powered result translation
+
 ### 📸 AI-Powered Food Scanner | ماسح الطعام الذكي
-- Instant product analysis using GPT-4o Vision
+- Instant product analysis using GPT-4o Vision and Gemini
 - Health score calculation (0-100)
 - NOVA food classification
 - Personalized warnings based on medical profile
@@ -57,7 +66,18 @@
 ### Prerequisites | المتطلبات
 ```bash
 Python 3.8+
-OpenAI API Key
+OpenAI API Key (or Google Gemini API Key)
+
+# System Dependencies for LiveVision
+# Windows:
+choco install tesseract
+conda install -c conda-forge zbar
+
+# Linux:
+sudo apt-get install tesseract-ocr tesseract-ocr-ara libzbar0
+
+# macOS:
+brew install tesseract tesseract-lang zbar
 ```
 
 ### Installation | التثبيت
@@ -77,9 +97,15 @@ cp .env.example .env
 python -c 'import secrets; print(secrets.token_urlsafe(32))'
 # Add the output to JWT_SECRET_KEY in .env
 
+# Run automated setup (checks system dependencies)
+python setup_livevision.py
+
 # Run the application
 streamlit run main.py
 ```
+
+### LiveVision Setup | إعداد الرؤية الحية
+For detailed LiveVision configuration and troubleshooting, see [LIVEVISION_INTEGRATION.md](LIVEVISION_INTEGRATION.md).
 
 ### ⚠️ Security Note | ملاحظة أمنية
 **Never commit sensitive data to git!** See [SECURITY_SETUP.md](SECURITY_SETUP.md) for detailed configuration guide.
@@ -104,14 +130,52 @@ ENVIRONMENT = "production"
 
 ```
 bioguard-ai/
-├── app.py                 # Main application
-├── requirements.txt       # Python dependencies
-├── .env                   # Environment variables (not in repo)
-├── .gitignore            # Git ignore rules
-├── README.md             # This file
-├── bioguard.db           # SQLite database (auto-created, not in repo)
+├── main.py                      # Main application entry point
+├── requirements.txt             # Python dependencies
+├── .env                         # Environment variables (not in repo)
+├── .env.example                # Template for environment setup
+├── .gitignore                  # Git ignore rules
+├── README.md                   # This file
+├── SECURITY_SETUP.md           # Security configuration guide
+├── LIVEVISION_INTEGRATION.md   # LiveVision documentation (NEW!)
+├── setup_livevision.py         # Automated setup script (NEW!)
+├── yolov8n.pt                  # YOLO object detection model
+├── bioguard.db                 # SQLite database (auto-created, not in repo)
+├── config/
+│   ├── __init__.py
+│   └── settings.py             # Environment-based configuration
+├── database/
+│   ├── __init__.py
+│   └── db_manager.py           # Database operations (SQLite + ChromaDB + NetworkX)
+├── models/
+│   ├── __init__.py
+│   └── schemas.py              # Pydantic data models
+├── services/
+│   ├── __init__.py
+│   ├── auth.py                 # Authentication & JWT
+│   ├── auth_privacy.py         # Privacy & FHIR integration
+│   ├── engine.py               # AI vision analysis engine
+│   ├── graph_engine.py         # Knowledge graph for health conflicts
+│   ├── digital_twin.py         # Digital twin predictions
+│   ├── live_vision.py          # Real-time vision processing
+│   ├── barcode_scanner.py      # Barcode scanning & OCR (NEW!)
+│   └── translation.py          # Multi-language translation (NEW!)
+├── ui_components/
+│   ├── __init__.py
+│   ├── navigation.py           # Sidebar navigation
+│   ├── dashboard_view.py       # Health dashboard
+│   ├── camera_view.py          # LiveVision camera interface (UPDATED!)
+│   ├── vault_view.py           # Medical vault
+│   └── theme_wheel.py          # Theme customization
+├── utils/
+│   ├── __init__.py
+│   └── helpers.py              # Utility functions
+├── prompts/
+│   └── system_prompts.py       # AI system prompts
+├── logs/
+│   └── bioguard.log            # Application logs (auto-created)
 └── .streamlit/
-    └── secrets.toml      # Streamlit secrets (not in repo)
+    └── secrets.toml            # Streamlit secrets (not in repo)
 ```
 
 ---
@@ -122,10 +186,17 @@ bioguard-ai/
 |------------|---------|
 | **Streamlit** | Web UI Framework |
 | **OpenAI GPT-4o** | AI Vision & Chat |
-| **SQLite** | Local Database |
+| **Google Gemini 1.5** | Alternative AI Vision Provider |
+| **SQLite** | Local Relational Database |
+| **ChromaDB** | Vector Database for Semantic Search |
+| **NetworkX** | Knowledge Graph for Health Conflicts |
 | **PyMuPDF** | PDF Processing |
 | **Plotly** | Interactive Charts |
 | **Pillow** | Image Processing |
+| **YOLOv8** | Object Detection |
+| **PyZBar** | Barcode Scanning (NEW!) |
+| **Tesseract** | OCR Text Extraction (NEW!) |
+| **streamlit-webrtc** | Real-time Video Streaming (NEW!) |
 
 ---
 
