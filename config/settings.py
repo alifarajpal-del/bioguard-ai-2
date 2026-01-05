@@ -14,6 +14,18 @@ DEBUG = ENVIRONMENT == "development"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8501/auth/google/callback")
+
+# Apple OAuth Configuration
+APPLE_CLIENT_ID = os.getenv("APPLE_CLIENT_ID", "")
+APPLE_TEAM_ID = os.getenv("APPLE_TEAM_ID", "")
+APPLE_KEY_ID = os.getenv("APPLE_KEY_ID", "")
+APPLE_PRIVATE_KEY = os.getenv("APPLE_PRIVATE_KEY", "")  # Base64 encoded .p8 file content
+APPLE_REDIRECT_URI = os.getenv("APPLE_REDIRECT_URI", "http://localhost:8501/auth/apple/callback")
+
 # JWT Secret Key - MUST be set in production
 _jwt_secret = os.getenv("JWT_SECRET_KEY")
 if not _jwt_secret:

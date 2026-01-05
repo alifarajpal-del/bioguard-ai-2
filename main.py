@@ -20,6 +20,7 @@ from ui_components.navigation import render_bottom_navigation, get_active_page
 from ui_components.dashboard_view import render_dashboard
 from ui_components.camera_view import render_camera_view
 from ui_components.vault_view import render_vault
+from ui_components.oauth_login import render_oauth_login, handle_oauth_callback
 from services.auth import create_or_login_user, logout
 
 
@@ -46,53 +47,29 @@ def init_session_state() -> None:
 # ============== Authentication UI ==============
 
 def render_auth_screen() -> None:
-    """Render authentication and lightweight profile capture."""
-    st.markdown("# 🧬 BioGuard AI")
-    st.markdown("### Privacy-First | Real-Time Analysis | Predictive Intelligence")
-
-    with st.container():
-        col1, col2 = st.columns([1.5, 1])
-
-        with col1:
-            st.markdown(
-                """
-                **Why BioGuard?**
-                - 🔐 Data stays on your device
-                - 🧠 Federated learning friendly
-                - 📊 Real-time AR food analysis
-                - 🔮 Biological Digital Twin predictions
-                """
-            )
-
-        with col2:
-            user_id = st.text_input("User ID", placeholder="user_123")
-            name = st.text_input("Name", placeholder="John Doe")
-            age = st.number_input("Age", min_value=1, max_value=120, value=30)
-            weight = st.number_input("Weight (kg)", min_value=20.0, max_value=300.0, value=70.0)
-            height = st.number_input("Height (cm)", min_value=100, max_value=250, value=170)
-            allergies_input = st.text_input("Allergies", placeholder="Peanuts, Dairy")
-            conditions_input = st.text_input("Conditions", placeholder="Diabetes, Hypertension")
-
-            if st.button("🚀 Continue", use_container_width=True):
-                if user_id and name:
-                    profile = {
-                        "user_id": user_id,
-                        "name": name,
-                        "age": age,
-                        "weight": weight,
-                        "height": height,
-                        "allergies": [a.strip() for a in allergies_input.split(",") if a.strip()],
-                        "medical_conditions": [c.strip() for c in conditions_input.split(",") if c.strip()],
-                    }
-                    token = create_or_login_user(profile)
-                    st.session_state.user_id = user_id
-                    st.session_state.user_profile = profile
-                    st.session_state.authenticated = True
-                    st.session_state.auth_token = token
-                    st.success("✅ Welcome back!")
-                    st.rerun()
-                else:
-                    st.warning("Please fill in User ID and Name")
+    """Render OAuth authentication screen with Google/Apple Sign-In."""
+    # Check if this is an OAuth callback
+    query_params = st.query_params
+    
+    # Handle Google OAuth callback
+    if "code" in query_params and "state" in query_params:
+        # Determine provider from URL path or session state
+        provider = st.session_state.get("oauth_provider", "google")
+        
+        code = query_params["code"]
+        state = query_params["state"]
+        
+        if handle_oauth_callback(provider, code, state):
+            # Clear query params
+            st.query_params.clear()
+            st.success("✅ تم تسجيل الدخول بنجاح!")
+            st.rerun()
+        else:
+            st.query_params.clear()
+            st.rerun()
+    
+    # Render OAuth login screen
+    render_oauth_login()
 
 
 # ============== Settings Page ==============

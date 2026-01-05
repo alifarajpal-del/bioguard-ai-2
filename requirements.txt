@@ -18,6 +18,10 @@ pyjwt>=2.8.0
 pyotp>=2.9.0
 cryptography>=41.0.0
 python-multipart>=0.0.6
+
+# OAuth Authentication
+requests>=2.31.0  # Already included above
+authlib>=1.3.0  # OAuth library for advanced features (optional)
 aiofiles>=23.2.0
 pandas>=2.0.0
 matplotlib>=3.7.0

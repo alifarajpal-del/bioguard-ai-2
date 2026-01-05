@@ -58,11 +58,15 @@ class DBManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Users table
+        # Users table - Updated with OAuth fields
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 name TEXT,
+                email TEXT,
+                picture TEXT,
+                provider TEXT,
+                email_verified BOOLEAN,
                 age INTEGER,
                 weight REAL,
                 height REAL,
@@ -157,10 +161,10 @@ class DBManager:
     
     def save_user(self, user_data: Dict[str, Any]) -> bool:
         """
-        Save or update user profile in SQLite database.
+        Save or update user profile in SQLite database with OAuth support.
         
         Args:
-            user_data: Dictionary containing user information (user_id, name, age, etc.)
+            user_data: Dictionary containing user information (user_id, name, email, provider, etc.)
             
         Returns:
             True if successful, False otherwise
@@ -171,12 +175,17 @@ class DBManager:
             
             cursor.execute("""
                 INSERT OR REPLACE INTO users 
-                (user_id, name, age, weight, height, allergies, medical_conditions, 
+                (user_id, name, email, picture, provider, email_verified,
+                 age, weight, height, allergies, medical_conditions, 
                  dietary_preferences, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_data['user_id'],
                 user_data.get('name'),
+                user_data.get('email'),
+                user_data.get('picture'),
+                user_data.get('provider', 'traditional'),
+                user_data.get('email_verified', False),
                 user_data.get('age'),
                 user_data.get('weight'),
                 user_data.get('height'),
@@ -216,12 +225,16 @@ class DBManager:
                 return {
                     'user_id': row[0],
                     'name': row[1],
-                    'age': row[2],
-                    'weight': row[3],
-                    'height': row[4],
-                    'allergies': json.loads(row[5] or '[]'),
-                    'medical_conditions': json.loads(row[6] or '[]'),
-                    'dietary_preferences': json.loads(row[7] or '[]'),
+                    'email': row[2],
+                    'picture': row[3],
+                    'provider': row[4],
+                    'email_verified': row[5],
+                    'age': row[6],
+                    'weight': row[7],
+                    'height': row[8],
+                    'allergies': json.loads(row[9] or '[]'),
+                    'medical_conditions': json.loads(row[10] or '[]'),
+                    'dietary_preferences': json.loads(row[11] or '[]'),
                 }
             return None
         except Exception as e:
