@@ -4,9 +4,13 @@ Provides consistent nutrient structure across providers.
 """
 
 import os
-from typing import Optional, Dict, Any, List
+import json
+from typing import Optional, Dict, Any, List, Tuple
 
 import requests
+
+from database.db_manager import get_db_manager
+from config.settings import CACHE_ENABLED
 
 
 class NutritionAPI:
@@ -26,10 +30,12 @@ class NutritionAPI:
         self.nutritionix_app_id = os.getenv("NUTRITIONIX_APP_ID")
         self.nutritionix_api_key = os.getenv("NUTRITIONIX_API_KEY")
 
-    def _format_response(self, data: Dict[str, Any], source: str) -> Dict[str, Any]:
-        """Return a normalized structure for core nutrient values."""
+    def _format_response(self, data: Dict[str, Any], source: str, confidence: float = 0.7, source_url: Optional[str] = None) -> Dict[str, Any]:
+        """Return a normalized structure for core nutrient values with trust metadata."""
         return {
             "source": source,
+            "source_url": source_url,
+            "confidence": confidence,
             "calories": data.get("calories"),
             "carbs": data.get("carbohydrates"),
             "fat": data.get("fat"),
@@ -56,8 +62,13 @@ class NutritionAPI:
                         "protein": nutr.get("proteins_100g"),
                         "sugars": nutr.get("sugars_100g"),
                         "product_name": product.get("product_name"),
+                        "brand": product.get("brands"),
+                        "barcode": barcode,
+                        "source_url": product.get("url"),
                     },
                     source="openfoodfacts",
+                    confidence=0.95,
+                    source_url=product.get("url"),
                 )
         return None
 
@@ -84,6 +95,7 @@ class NutritionAPI:
                         "product_name": foods[0].get("description"),
                     },
                     source="fooddata",
+                    confidence=0.7,
                 )
         return None
 
@@ -110,6 +122,7 @@ class NutritionAPI:
                         "product_name": hints[0].get("food", {}).get("label"),
                     },
                     source="edamam",
+                    confidence=0.7,
                 )
         return None
 
@@ -138,6 +151,7 @@ class NutritionAPI:
                         "product_name": foods[0].get("food"),
                     },
                     source="edamam_vision",
+                    confidence=0.55,
                 )
         return None
 
@@ -169,7 +183,15 @@ class NutritionAPI:
                         "product_name": item.get("food_name"),
                     },
                     source="nutritionix",
+                    confidence=0.7,
                 )
+        return None
+
+    def _cache_key(self, barcode: Optional[str], query: Optional[str]) -> Optional[str]:
+        if barcode:
+            return f"barcode::{barcode}"
+        if query:
+            return f"query::{query.strip().lower()}"
         return None
 
     def get_nutrition(
@@ -181,7 +203,17 @@ class NutritionAPI:
     ) -> Dict[str, Any]:
         """
         Try sources in preferred order; returns first successful result or an empty payload.
+        Includes cache lookup and write-through.
         """
+        cache_key = self._cache_key(barcode, query)
+        db = get_db_manager()
+
+        if CACHE_ENABLED and cache_key:
+            cached = db.get_cached_nutrition(cache_key)
+            if cached:
+                cached["cached"] = True
+                return cached
+
         sources = preferred_sources or ["openfoodfacts", "fooddata", "edamam", "nutritionix"]
         for source in sources:
             result = None
@@ -196,5 +228,7 @@ class NutritionAPI:
             elif source == "nutritionix" and query:
                 result = self.fetch_from_nutritionix(query)
             if result:
+                if cache_key and CACHE_ENABLED:
+                    db.save_nutrition_cache(cache_key, result)
                 return result
         return {"source": None, "raw": None}

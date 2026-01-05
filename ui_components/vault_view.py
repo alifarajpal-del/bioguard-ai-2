@@ -3,10 +3,15 @@
 import streamlit as st
 from datetime import datetime
 from ui_components.theme_wheel import get_current_theme
+from ui_components.error_ui import safe_render
 
 
 def render_vault() -> None:
     """Render medical vault with modern grid design"""
+    safe_render(_render_vault_inner, context="vault")
+
+
+def _render_vault_inner() -> None:
     theme = get_current_theme()
     
     # Back to home button

@@ -13,7 +13,7 @@ from PIL import Image
 
 def _get_page_icon():
     """Load app icon from branding assets if available."""
-    logo_path = os.path.join("assets", "branding", "bioguard-shield.png")
+    logo_path = os.path.join("ui_components", "assets", "logo.png")
     if os.path.exists(logo_path):
         try:
             return Image.open(logo_path)
@@ -37,6 +37,10 @@ from ui_components.dashboard_view import render_dashboard
 from ui_components.vault_view import render_vault
 from ui_components.oauth_login import render_oauth_login, handle_oauth_callback
 from ui_components.global_styles import inject_global_css
+from ui_components.branding import render_brand_header
+from ui_components.onboarding import render_onboarding
+from ui_components.router import ensure_nav_state, go_to, go_back, next_page, prev_page
+from ui_components.error_ui import safe_render
 from services.auth import create_or_login_user, logout
 
 # Camera view - choose version
@@ -49,6 +53,13 @@ except ImportError:
 
 from ui_components.camera_view import render_camera_view as render_camera_legacy
 
+PAGE_SUBTITLES = {
+    "dashboard": "لوحة التحكم الصحية",
+    "scan": "الكاميرا الذكية",
+    "vault": "المخزن الطبي",
+    "settings": "الإعدادات والثيم والمزامنة",
+}
+
 
 # ============== Session State Initialization ==============
 
@@ -60,8 +71,6 @@ def init_session_state() -> None:
         st.session_state.authenticated = False
     if "user_profile" not in st.session_state:
         st.session_state.user_profile = None
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = "home"
     if "active_theme" not in st.session_state:
         st.session_state.active_theme = "dark"
     if "analysis_history" not in st.session_state:
@@ -70,10 +79,9 @@ def init_session_state() -> None:
         st.session_state.ai_provider = "gemini"
     if "use_refactored_camera" not in st.session_state:
         st.session_state.use_refactored_camera = REFACTORED_CAMERA_AVAILABLE
-    if "swipe_next" not in st.session_state:
-        st.session_state.swipe_next = False
-    if "swipe_prev" not in st.session_state:
-        st.session_state.swipe_prev = False
+    ensure_nav_state()
+    if "onboarding_done" not in st.session_state:
+        st.session_state.onboarding_done = False
 
 
 # ============== Authentication UI ==============
@@ -94,7 +102,7 @@ def render_auth_screen() -> None:
         if handle_oauth_callback(provider, code, state):
             # Clear query params and redirect to dashboard
             st.query_params.clear()
-            st.session_state.current_page = "home"
+            st.session_state.current_page = "dashboard"
             st.success("✅ تم تسجيل الدخول بنجاح!")
             st.rerun()
         else:
@@ -108,10 +116,14 @@ def render_auth_screen() -> None:
 # ============== Settings Page ==============
 
 def render_settings_page() -> None:
-    # Back to home button
-    if st.button("🔙 رجوع إلى الرئيسية", key="settings_back_home"):
-        st.session_state.current_page = "home"
-        st.rerun()
+    """Render settings page with safe error handling."""
+    safe_render(_render_settings_inner, context="settings")
+
+
+def _render_settings_inner() -> None:
+    # Back button
+    if st.button("⬅️ رجوع", key="settings_back_home"):
+        go_back()
     
     st.markdown("## ⚙️ Settings & Theme")
     render_theme_wheel()
@@ -155,6 +167,19 @@ def render_settings_page() -> None:
         st.success("Profile saved locally")
 
     st.divider()
+    
+    st.markdown("### 🩺 Diagnostics")
+    with st.expander("System Info", expanded=False):
+        st.write({
+            "current_page": st.session_state.get("current_page", "N/A"),
+            "nav_stack_depth": len(st.session_state.get("nav_stack", [])),
+            "authenticated": st.session_state.get("authenticated", False),
+            "onboarding_done": st.session_state.get("onboarding_done", False),
+            "ai_provider": st.session_state.get("ai_provider", "N/A"),
+            "active_theme": st.session_state.get("active_theme", "N/A"),
+        })
+    
+    st.divider()
     if st.button("🚪 Logout", use_container_width=True):
         logout(st.session_state.user_id or "")
         st.session_state.authenticated = False
@@ -174,27 +199,31 @@ def main() -> None:
         render_auth_screen()
         return
 
+    if not st.session_state.onboarding_done:
+        render_onboarding()
+        return
+
     def _handle_swipe_navigation() -> None:
         """Update current_page based on swipe gestures."""
-        pages = ["home", "scan", "vault", "settings"]
-        current = st.session_state.get("current_page", "home")
-
         if st.session_state.get("swipe_next"):
             st.session_state.swipe_next = False
-            idx = pages.index(current) if current in pages else 0
-            st.session_state.current_page = pages[(idx + 1) % len(pages)]
-            st.rerun()
+            go_to(next_page())
 
         if st.session_state.get("swipe_prev"):
             st.session_state.swipe_prev = False
-            idx = pages.index(current) if current in pages else 0
-            st.session_state.current_page = pages[(idx - 1) % len(pages)]
-            st.rerun()
+            go_to(prev_page())
 
     _handle_swipe_navigation()
 
     page = get_active_page()
-    if page == "home":
+
+    if page != "scan":
+        render_brand_header(subtitle=PAGE_SUBTITLES.get(page, "BioGuard AI"))
+        if page != "dashboard" and st.session_state.get("nav_stack"):
+            if st.button("⬅️ رجوع", key="back_btn_top"):
+                go_back()
+
+    if page == "dashboard":
         render_dashboard()
     elif page == "scan":
         # Choose camera version based on settings

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import streamlit as st
+from ui_components.error_ui import safe_render
 from PIL import Image
 
 try:
@@ -30,343 +31,95 @@ from config.settings import (
     DEFAULT_REGION,
     DEFAULT_PREFERRED_SOURCES,
     REGIONAL_SOURCE_DEFAULTS,
-    HEALTH_SYNC_DEFAULT,
+        safe_render(_render_camera_inner, context="camera")
 )
-from services.nutrition_api import NutritionAPI
+    def _render_camera_inner() -> None:
+        # Back to previous page
+        if st.button("⬅️ رجوع", key="camera_back_home"):
+            go_back()
+    
+        _inject_camera_css()
+        render_brand_watermark("BioGuard AI")
 
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Scan barcode", use_container_width=True):
+            st.session_state.scan_status = 'searching'
+        if c2.button("Capture photo", use_container_width=True):
+            st.session_state.scan_status = 'detected'
+        if c3.button("Upload image", use_container_width=True):
+            st.session_state.show_upload = True
+    
+        # Initialize session state
+        if 'scan_status' not in st.session_state:
+            st.session_state.scan_status = 'searching'  # searching, detected, analyzing, complete
+        if 'last_barcode' not in st.session_state:
+            st.session_state.last_barcode = None
+        if 'analysis_history' not in st.session_state:
+            st.session_state.analysis_history = []
+        if 'language' not in st.session_state:
+            st.session_state.language = 'en'
+        if 'preferred_sources' not in st.session_state:
+            st.session_state.preferred_sources = _get_preferred_sources()
+        if 'region' not in st.session_state:
+            st.session_state.region = DEFAULT_REGION
+        if 'health_sync_enabled' not in st.session_state:
+            st.session_state.health_sync_enabled = HEALTH_SYNC_DEFAULT
+        if 'last_nutrition_snapshot' not in st.session_state:
+            st.session_state.last_nutrition_snapshot = None
+        if 'show_upload' not in st.session_state:
+            st.session_state.show_upload = False
 
-def _inject_camera_css() -> None:
-    """Inject iOS-style camera CSS with grid overlay and modern controls"""
-    css = """
-    <style>
-        /* iOS Native Camera - Full Screen */
-        .scan-stage {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: calc(100vh - 80px);
-            z-index: 100;
-            background: #000;
-            overflow: hidden;
-        }
-        
-        /* Force WebRTC container to fill */
-        .scan-stage [data-testid="stWebRtc"] {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 1;
-        }
-        
-        /* Video element - cover entire screen */
-        .scan-stage video {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-            border-radius: 0 !important;
-            transform: scaleX(-1); /* mirror for selfie */
-        }
-
-        /* Force embedded WebRTC video to fill and sit behind HUD */
-        .streamlit-webrtc video {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-        }
-        .streamlit-webrtc {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: -1; /* background layer */
-        }
-        .streamlit-webrtc .stVideo {
-            display: none;
-        }
-        
-        /* CRITICAL: Hide ALL default WebRTC controls */
-        [data-testid="stWebRtc"] button,
-        [data-testid="stWebRtc"] select,
-        .scan-stage button[kind],
-        .scan-stage button[type],
-        div[data-testid="stVerticalBlock"] > div > button {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
-        
-        /* iOS Grid Overlay - Rule of Thirds */
-        .camera-grid {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 2;
-            opacity: 0.3;
-        }
-        
-        .camera-grid::before,
-        .camera-grid::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 255, 255, 0.5);
-        }
-        
-        /* Vertical Lines */
-        .camera-grid::before {
-            left: 33.33%;
-            top: 0;
-            bottom: 0;
-            width: 1px;
-            box-shadow: 100vw 0 0 rgba(255, 255, 255, 0.5);
-        }
-        
-        /* Horizontal Lines */
-        .camera-grid::after {
-            top: 33.33%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            box-shadow: 0 33.34vh 0 rgba(255, 255, 255, 0.5);
-        }
-        
-        /* Overlay gradient */
-        .scan-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.6) 100%);
-            z-index: 2;
-        }
-        
-        /* HUD Elements */
-        .hud-top {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
+        if st.session_state.show_upload:
+            _render_upload_fallback()
             display: flex;
+            flex-direction: column;
             justify-content: space-between;
-            align-items: center;
-            color: #fff;
-            font-weight: 700;
+            padding: 16px;
             pointer-events: none;
-            z-index: 3;
+            z-index: 10;
         }
-        
-        .pill {
-            padding: 10px 16px;
-            border-radius: 999px;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            font-size: 13px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .pill.live { background: rgba(16,185,129,0.95); }
-        .pill.status { background: rgba(59,130,246,0.92); }
-        
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #fff;
-            animation: blink 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        
-        /* iOS Style Bottom Controls */
-        .hud-bottom {
-            position: absolute;
-            bottom: 110px;
-            left: 0;
-            right: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 40px;
-            pointer-events: none;
-            z-index: 3;
-        }
-        
-        /* Main Capture Button - iOS Style */
-        .capture-btn {
+        .camera-top, .camera-bottom { display: flex; justify-content: space-between; align-items: center; }
+        .camera-buttons { display: flex; gap: 12px; }
+        .camera-cta button {
             pointer-events: auto;
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: #fff;
-            border: 6px solid rgba(255,255,255,0.4);
-            box-shadow: 
-                0 10px 30px rgba(0,0,0,0.5),
-                inset 0 -2px 8px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            cursor: pointer;
-            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-        }
-        
-        .capture-btn::before {
-            content: '';
-            position: absolute;
-            inset: -12px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-        }
-        
-        .capture-btn:active {
-            transform: scale(0.90);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
-        }
-        
-        /* Side Control Buttons */
-        .side-control {
-            pointer-events: auto;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-size: 24px;
-        }
-        
-        .side-control:hover {
-            transform: scale(1.1);
-            background: rgba(0, 0, 0, 0.7);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-        
-        .side-control:active {
-            transform: scale(0.95);
-        }
-        
-        /* Quick Action Pills */
-        .quick-action {
-            pointer-events: auto;
-            min-width: 80px;
-            text-align: center;
-            color: #fff;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: none;
             font-weight: 700;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 16px;
             background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(20px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            cursor: pointer;
-            border: 2px solid rgba(255,255,255,0.2);
-            transition: all 0.2s ease;
+            color: #fff;
+            backdrop-filter: blur(12px);
         }
-        
-        .quick-action:hover {
-            background: rgba(0,0,0,0.75);
-            border-color: rgba(255,255,255,0.4);
-            transform: translateY(-2px);
+        .camera-back {
+            pointer-events: auto;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-weight: 700;
         }
-        
-        /* Helper Text at Bottom */
-        .scan-helper {
-            position: absolute;
-            bottom: 40px;
+        .camera-status {
+            pointer-events: auto;
+            background: rgba(16,185,129,0.8);
+            color: #fff;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-weight: 700;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+        }
+        .bottom-sheet {
+            pointer-events: auto;
+            position: fixed;
             left: 0;
             right: 0;
-            color: rgba(255,255,255,0.95);
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            text-shadow: 0 2px 12px rgba(0,0,0,0.7);
-            z-index: 3;
-            padding: 12px 20px;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            max-width: 320px;
-            margin: 0 auto;
-        }
-        
-        /* Progress Ring */
-        .progress-ring {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 4;
-        }
-        
-        .progress-ring circle {
-            fill: transparent;
-            stroke: #10b981;
-            stroke-width: 4;
-            stroke-dasharray: 251.2;
-            stroke-dashoffset: 251.2;
-            animation: progress 2s ease-in-out forwards;
-        }
-        
-        @keyframes progress {
-            to { stroke-dashoffset: 0; }
-        }
-        
-        /* Detection Box */
-        .detection-box {
-            position: absolute;
-            border: 3px solid #10b981;
-            border-radius: 8px;
-            background: rgba(16, 185, 129, 0.1);
-            backdrop-filter: blur(4px);
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.02); }
-        }
-        
-        /* Status Messages */
-        .status-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 20px 40px;
-            border-radius: 16px;
-            font-size: 18px;
-            font-weight: 600;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 16px;
+            border-radius: 16px 16px 0 0;
             backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            z-index: 5;
-            animation: fadeIn 0.3s ease-in;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            z-index: 20;
         }
     </style>
     """
@@ -434,12 +187,20 @@ class LiveVisionProcessor(VideoProcessorBase):
 
 def render_camera_view() -> None:
     """Render live camera view with AR overlays and continuous scanning."""
-    # Back to home button
-    if st.button("🔙 رجوع إلى الرئيسية", key="camera_back_home"):
-        st.session_state.current_page = "home"
-        st.rerun()
+    # Back to previous page
+    if st.button("⬅️ رجوع", key="camera_back_home"):
+        go_back()
     
     _inject_camera_css()
+    render_brand_watermark("BioGuard AI")
+
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Scan barcode", use_container_width=True):
+        st.session_state.scan_status = 'searching'
+    if c2.button("Capture photo", use_container_width=True):
+        st.session_state.scan_status = 'detected'
+    if c3.button("Upload image", use_container_width=True):
+        st.session_state.show_upload = True
     
     # Initialize session state
     if 'scan_status' not in st.session_state:
@@ -458,6 +219,11 @@ def render_camera_view() -> None:
         st.session_state.health_sync_enabled = HEALTH_SYNC_DEFAULT
     if 'last_nutrition_snapshot' not in st.session_state:
         st.session_state.last_nutrition_snapshot = None
+    if 'show_upload' not in st.session_state:
+        st.session_state.show_upload = False
+
+    if st.session_state.show_upload:
+        _render_upload_fallback()
 
     if not WEBRTC_AVAILABLE:
         _render_upload_fallback()
@@ -1054,6 +820,25 @@ def _render_upload_fallback() -> None:
                     
                     st.subheader(result.get('product', 'Unknown Product'))
                     
+                    # Data trust indicators
+                    if st.session_state.last_nutrition_snapshot:
+                        snapshot = st.session_state.last_nutrition_snapshot
+                        trust_col1, trust_col2 = st.columns(2)
+                        with trust_col1:
+                            source = snapshot.get('source', 'N/A')
+                            source_url = snapshot.get('source_url')
+                            if source_url:
+                                st.markdown(f"**Source:** [{source}]({source_url})")
+                            else:
+                                st.markdown(f"**Source:** {source}")
+                            if snapshot.get('cached'):
+                                st.caption("🗄️ Cached")
+                        with trust_col2:
+                            confidence = snapshot.get('confidence', 0.5)
+                            conf_label = "High" if confidence >= 0.8 else ("Medium" if confidence >= 0.6 else "Low")
+                            conf_color = "green" if confidence >= 0.8 else ("orange" if confidence >= 0.6 else "red")
+                            st.markdown(f"**Confidence:** :{conf_color}[{conf_label}] ({confidence:.0%})")
+                    
                     # Health score
                     score = result.get('health_score', 50)
                     color = '#10b981' if score > 70 else ('#f59e0b' if score > 40 else '#ef4444')
@@ -1062,6 +847,8 @@ def _render_upload_fallback() -> None:
                         {score}/100
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    st.caption("ℹ️ AI analysis is for guidance only. Always check actual labels and consult professionals.")
                     
                     # Show all data
                     with st.expander("📊 Full Analysis"):

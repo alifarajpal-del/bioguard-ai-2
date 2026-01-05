@@ -9,25 +9,27 @@ from plotly.colors import hex_to_rgb
 import pandas as pd
 from datetime import datetime, timedelta
 from ui_components.theme_wheel import get_current_theme
+from ui_components.error_ui import safe_render
 
 
 def render_dashboard() -> None:
     """Render modern dashboard with card-based design."""
+    safe_render(_render_dashboard_inner, context="dashboard")
+
+
+def _render_dashboard_inner() -> None:
     theme = get_current_theme()
-    
-    # Inject dashboard-specific CSS
     _inject_dashboard_css(theme)
-    
     st.markdown("## 🏠 لوحة التحكم")
     _modern_stats_cards(theme)
     st.divider()
-    
+
     col1, col2 = st.columns(2, gap="large")
     with col1:
         _health_score_trend(theme)
     with col2:
         _safety_breakdown(theme)
-    
+
     st.divider()
     _activity_feed(theme)
 

@@ -24,7 +24,7 @@ except ImportError:
 
 import networkx as nx
 from config.settings import (
-    DATABASE_PATH, VECTOR_DB_PATH, GRAPH_DB_PATH, CACHE_ENABLED
+    DATABASE_PATH, VECTOR_DB_PATH, GRAPH_DB_PATH, CACHE_ENABLED, CACHE_TTL_SECONDS
 )
 
 
@@ -96,6 +96,18 @@ class DBManager:
                 barcode TEXT,
                 created_at TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS nutrition_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cache_key TEXT UNIQUE,
+                payload TEXT,
+                source TEXT,
+                source_url TEXT,
+                confidence REAL,
+                created_at TIMESTAMP
             )
         """)
 
@@ -368,6 +380,58 @@ class DBManager:
         except Exception as e:
             print(f"❌ Error saving food analysis: {e}")
             return False
+
+    def get_cached_nutrition(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Return cached nutrition payload if within TTL."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT payload, created_at FROM nutrition_cache WHERE cache_key = ?",
+                (cache_key,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if not row:
+                return None
+            payload, created_at = row
+            created_ts = datetime.fromisoformat(created_at)
+            age_seconds = (datetime.utcnow() - created_ts).total_seconds()
+            if age_seconds > CACHE_TTL_SECONDS:
+                return None
+            return json.loads(payload)
+        except Exception as exc:
+            print(f"⚠️ Cache read failed: {exc}")
+            return None
+
+    def save_nutrition_cache(
+        self,
+        cache_key: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Persist nutrition payload for offline-like experience."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO nutrition_cache
+                (cache_key, payload, source, source_url, confidence, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    cache_key,
+                    json.dumps(payload),
+                    payload.get("source"),
+                    payload.get("source_url"),
+                    payload.get("confidence"),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print(f"⚠️ Cache write failed: {exc}")
     
     def _add_to_vector_db(self, analysis_data: Dict[str, Any]):
         """

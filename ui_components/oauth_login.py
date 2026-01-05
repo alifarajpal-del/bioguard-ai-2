@@ -4,28 +4,14 @@ Beautiful login screen with Google and Apple Sign-In buttons.
 """
 
 import secrets
-from pathlib import Path
-from typing import Optional
 
 import streamlit as st
-from PIL import Image
 
 from services.oauth_providers import get_oauth_provider
 from services.auth import create_or_login_user
 from ui_components.theme_wheel import get_current_theme
 from database.db_manager import get_db_manager
-
-
-def _load_logo_image() -> Optional[Image.Image]:
-    """Load branding logo from local assets; return None on failure."""
-    logo_path = Path(__file__).parent / "assets" / "logo.png"
-    if not logo_path.exists():
-        return None
-    try:
-        return Image.open(logo_path)
-    except Exception:
-        return None
-
+from ui_components.branding import load_logo_image
 
 def _inject_oauth_css() -> None:
     """Inject CSS for OAuth login screen."""
@@ -245,7 +231,7 @@ def render_oauth_login() -> None:
     """Render OAuth login screen with Google and Apple Sign-In."""
     _inject_oauth_css()
 
-    logo_image = _load_logo_image()
+    logo_image = load_logo_image()
     
     # Initialize session state
     if "oauth_state" not in st.session_state:

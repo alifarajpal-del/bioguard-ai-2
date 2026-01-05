@@ -1,12 +1,13 @@
 """Modern bottom navigation bar with iOS-style design."""
 
 import streamlit as st
-import streamlit.components.v1 as components
 from ui_components.theme_wheel import get_current_theme
+from ui_components.router import ensure_nav_state, go_to
 
 
 def render_bottom_navigation():
     """Render modern bottom navigation with circular buttons and labels"""
+    ensure_nav_state()
     theme = get_current_theme()
     active_page = st.session_state.get("current_page", "home")
 
@@ -162,7 +163,7 @@ def render_bottom_navigation():
     st.markdown(css, unsafe_allow_html=True)
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="swipe-handle">إسحب للأعلى للصفحة التالية • اسحب للأسفل للرجوع</div>', unsafe_allow_html=True)
+    st.markdown('<div class="swipe-handle">اسحب لليسار للتالي • اسحب لليمين للرجوع</div>', unsafe_allow_html=True)
 
     # Bottom Navigation Bar
     nav_container = st.container()
@@ -170,7 +171,7 @@ def render_bottom_navigation():
         st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
         
         nav_items = [
-            ("home", "🏠", "الرئيسية"),
+            ("dashboard", "🏠", "الرئيسية"),
             ("scan", "📸", "الكاميرا"),
             ("vault", "🗄️", "المخزن"),
             ("settings", "⚙️", "الإعدادات"),
@@ -190,39 +191,46 @@ def render_bottom_navigation():
                     type=button_type,
                     help=f"انتقل إلى {label}"
                 ):
-                    st.session_state.current_page = page
-                    st.rerun()
+                    go_to(page)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Touch swipe listener injected once per render
-        components.html(
+        # Touch swipe listener injected once per render (left/right)
+        swipe_placeholder = st.empty()
+        try:
+            swipe_placeholder.components.v1.html(
                 """
                 <script>
+                    let startX = null;
                     let startY = null;
                     document.addEventListener('touchstart', function(e) {
+                        startX = e.touches[0].clientX;
                         startY = e.touches[0].clientY;
                     });
                     document.addEventListener('touchend', function(e) {
-                        if (startY === null) return;
-                        let endY = e.changedTouches[0].clientY;
-                        let deltaY = startY - endY;
-                        if (deltaY > 50) {
-                            window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_next', value: true}, '*');
+                        if (startX === null || startY === null) return;
+                        const endX = e.changedTouches[0].clientX;
+                        const endY = e.changedTouches[0].clientY;
+                        const deltaX = endX - startX;
+                        const deltaY = endY - startY;
+                        if (Math.abs(deltaX) > 60 && Math.abs(deltaY) < 50) {
+                            if (deltaX < 0) {
+                                window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_next', value: true}, '*');
+                            } else {
+                                window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_prev', value: true}, '*');
+                            }
                         }
-                        if (deltaY < -50) {
-                            window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_prev', value: true}, '*');
-                        }
+                        startX = null;
                         startY = null;
                     });
                 </script>
                 """,
                 height=0,
-                width=0,
-                key="swipe_listener",
-        )
+            )
+        except Exception:
+            st.warning("Swipe navigation unavailable right now.")
 
 
 def get_active_page() -> str:
     """Get the currently active page"""
-    return st.session_state.get("current_page", "home")
+    return st.session_state.get("current_page", "dashboard")
