@@ -1,122 +1,194 @@
-"""Bottom navigation bar component."""
+"""Modern bottom navigation bar with iOS-style design."""
 
 import streamlit as st
 from ui_components.theme_wheel import get_current_theme
 
 
 def render_bottom_navigation():
+    """Render modern bottom navigation with circular buttons and labels"""
     theme = get_current_theme()
     active_page = st.session_state.get("active_page", "home")
 
-    # iOS Dock Style CSS
+    # Modern Bottom Navigation CSS with theme colors
     css = f"""
     <style>
-        /* iOS Dock Container */
+        /* Modern Bottom Navigation Container */
         .nav-dock {{
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(249, 249, 249, 0.94);
+            background: {theme['card_bg']};
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-top: 2px solid {theme['secondary']};
             z-index: 99999;
-            padding: 8px 0 20px 0;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+            padding: 12px 0 16px 0;
+            box-shadow: 0 -8px 24px {theme['primary']}15;
         }}
         
-        /* Navigation buttons - iOS style */
-        .nav-dock [data-testid="column"] {{
-            padding: 0 !important;
+        /* Navigation Container */
+        .nav-items-container {{
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 0 20px;
         }}
         
-        .nav-dock button {{
+        /* Navigation Item */
+        .nav-item {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 8px 16px;
+            border-radius: 16px;
+            position: relative;
+        }}
+        
+        .nav-item:hover {{
+            transform: translateY(-4px);
+            background: {theme['secondary']};
+        }}
+        
+        .nav-item.active {{
+            background: linear-gradient(135deg, {theme['primary']}15, {theme['accent']}15);
+        }}
+        
+        /* Circular Icon Button */
+        .nav-icon {{
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            background: {theme['secondary']};
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px {theme['primary']}10;
+        }}
+        
+        .nav-item:hover .nav-icon {{
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px {theme['primary']}25;
+            border-color: {theme['primary']}40;
+        }}
+        
+        .nav-item.active .nav-icon {{
+            background: linear-gradient(135deg, {theme['primary']}, {theme['accent']});
+            box-shadow: 0 8px 24px {theme['primary']}40;
+            transform: scale(1.05);
+            border-color: {theme['primary']};
+        }}
+        
+        /* Navigation Label */
+        .nav-label {{
+            font-size: 11px;
+            font-weight: 700;
+            color: {theme['text']};
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }}
+        
+        .nav-item.active .nav-label {{
+            opacity: 1;
+            color: {theme['primary']};
+            font-weight: 800;
+        }}
+        
+        /* Active Indicator Dot */
+        .nav-indicator {{
+            position: absolute;
+            top: 4px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: {theme['primary']};
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }}
+        
+        .nav-item.active .nav-indicator {{
+            opacity: 1;
+        }}
+        
+        /* Bottom Spacer */
+        .bottom-spacer {{
+            height: 90px;
+        }}
+        
+        /* Hide default Streamlit button styling in nav */
+        .nav-dock .stButton > button {{
             background: transparent !important;
             border: none !important;
-            border-radius: 16px !important;
-            padding: 8px !important;
-            font-size: 28px !important;
-            line-height: 1 !important;
-            width: 100% !important;
-            color: #8e8e93 !important;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             box-shadow: none !important;
-            font-weight: 400 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: auto !important;
         }}
         
-        .nav-dock button:hover {{
-            transform: scale(1.15) translateY(-4px) !important;
-            filter: brightness(1.1) !important;
-        }}
-        
-        .nav-dock button:active {{
-            transform: scale(0.92) !important;
-            transition: all 0.1s ease !important;
-        }}
-        
-        /* Active state - iOS blue */
-        .nav-dock button.active-nav {{
-            color: #007AFF !important;
-            background: rgba(0, 122, 255, 0.08) !important;
-            transform: scale(1.08) !important;
-        }}
-        
-        .bottom-spacer {{
-            height: 75px;
-        }}
-        
-        /* Label under icon */
-        .nav-label {{
-            font-size: 10px;
-            color: #8e8e93;
-            font-weight: 500;
-            margin-top: 2px;
-            letter-spacing: -0.2px;
-        }}
-        
-        .nav-label.active {{
-            color: #007AFF;
+        .nav-dock .stButton > button:hover {{
+            background: transparent !important;
+            border: none !important;
+            transform: none !important;
         }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
 
-    # iOS Dock Navigation
+    # Bottom Navigation Bar
     nav_container = st.container()
     with nav_container:
         st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
-        cols = st.columns(4)
         
         nav_items = [
-            ("home", "🏡", "Home"),
-            ("scan", "🎥", "Scan"),
-            ("vault", "📦", "Vault"),
-            ("settings", "🛠️", "Settings"),
+            ("home", "🏠", "الرئيسية"),
+            ("scan", "📸", "الكاميرا"),
+            ("vault", "🗄️", "المخزن"),
+            ("settings", "⚙️", "الإعدادات"),
         ]
         
+        # Create navigation HTML
+        nav_html = '<div class="nav-items-container">'
+        for page, icon, label in nav_items:
+            is_active = page == active_page
+            active_class = "active" if is_active else ""
+            nav_html += f'''
+                <div class="nav-item {active_class}" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', key: 'nav_{page}', value: true}}, '*')">
+                    <div class="nav-indicator"></div>
+                    <div class="nav-icon">{icon}</div>
+                    <div class="nav-label">{label}</div>
+                </div>
+            '''
+        nav_html += '</div>'
+        st.markdown(nav_html, unsafe_allow_html=True)
+        
+        # Use columns for click detection (fallback method)
+        cols = st.columns(4)
         for col, (page, icon, label) in zip(cols, nav_items):
             with col:
-                is_active = page == active_page
-                # Use plain emoji as button label - Streamlit will render it properly
+                # Hidden button for click detection
                 if st.button(
-                    icon,
+                    label,
                     key=f"nav_{page}",
                     use_container_width=True,
+                    help=f"انتقل إلى {label}"
                 ):
                     st.session_state.active_page = page
                     st.rerun()
-                
-                # Label below icon
-                label_class = "active" if is_active else ""
-                st.markdown(
-                    f'<div class="nav-label {label_class}" style="text-align:center;">{label}</div>',
-                    unsafe_allow_html=True
-                )
         
         st.markdown('</div>', unsafe_allow_html=True)
 
 
 def get_active_page() -> str:
+    """Get the currently active page"""
     return st.session_state.get("active_page", "home")

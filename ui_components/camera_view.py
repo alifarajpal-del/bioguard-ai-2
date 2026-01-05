@@ -27,6 +27,7 @@ from config.settings import DETECTION_FPS, SUPPORTED_LANGUAGES
 
 
 def _inject_camera_css() -> None:
+    """Inject iOS-style camera CSS with grid overlay and modern controls"""
     css = """
     <style>
         /* iOS Native Camera - Full Screen */
@@ -75,12 +76,46 @@ def _inject_camera_css() -> None:
             pointer-events: none !important;
         }
         
+        /* iOS Grid Overlay - Rule of Thirds */
+        .camera-grid {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0.3;
+        }
+        
+        .camera-grid::before,
+        .camera-grid::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* Vertical Lines */
+        .camera-grid::before {
+            left: 33.33%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            box-shadow: 100vw 0 0 rgba(255, 255, 255, 0.5);
+        }
+        
+        /* Horizontal Lines */
+        .camera-grid::after {
+            top: 33.33%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            box-shadow: 0 33.34vh 0 rgba(255, 255, 255, 0.5);
+        }
+        
         /* Overlay gradient */
         .scan-overlay {
             position: absolute;
             inset: 0;
             pointer-events: none;
-            background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.5) 100%);
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.6) 100%);
             z-index: 2;
         }
         
@@ -100,18 +135,20 @@ def _inject_camera_css() -> None:
         }
         
         .pill {
-            padding: 8px 14px;
+            padding: 10px 16px;
             border-radius: 999px;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-            font-size: 12px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            font-size: 13px;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .pill.live { background: rgba(16,185,129,0.95); }
-        .pill.status { background: rgba(59,130,246,0.9); }
+        .pill.status { background: rgba(59,130,246,0.92); }
         
         .dot {
             width: 8px;
@@ -126,66 +163,122 @@ def _inject_camera_css() -> None:
             50% { opacity: 0.3; }
         }
         
-        /* Bottom HUD */
+        /* iOS Style Bottom Controls */
         .hud-bottom {
             position: absolute;
-            bottom: 100px;
+            bottom: 110px;
             left: 0;
             right: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 30px;
+            gap: 40px;
             pointer-events: none;
             z-index: 3;
         }
         
+        /* Main Capture Button - iOS Style */
         .capture-btn {
             pointer-events: auto;
-            width: 72px;
-            height: 72px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             background: #fff;
-            border: 5px solid rgba(255,255,255,0.3);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            border: 6px solid rgba(255,255,255,0.4);
+            box-shadow: 
+                0 10px 30px rgba(0,0,0,0.5),
+                inset 0 -2px 8px rgba(0,0,0,0.1);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
+            font-size: 32px;
             cursor: pointer;
-            transition: transform 0.1s ease;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .capture-btn::before {
+            content: '';
+            position: absolute;
+            inset: -12px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
         }
         
         .capture-btn:active {
-            transform: scale(0.92);
+            transform: scale(0.90);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
         }
         
+        /* Side Control Buttons */
+        .side-control {
+            pointer-events: auto;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 24px;
+        }
+        
+        .side-control:hover {
+            transform: scale(1.1);
+            background: rgba(0, 0, 0, 0.7);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .side-control:active {
+            transform: scale(0.95);
+        }
+        
+        /* Quick Action Pills */
         .quick-action {
             pointer-events: auto;
-            min-width: 70px;
+            min-width: 80px;
             text-align: center;
             color: #fff;
-            font-weight: 600;
-            font-size: 12px;
-            padding: 8px 12px;
-            border-radius: 12px;
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(8px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            font-weight: 700;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: 16px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
             cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.2);
+            transition: all 0.2s ease;
         }
         
+        .quick-action:hover {
+            background: rgba(0,0,0,0.75);
+            border-color: rgba(255,255,255,0.4);
+            transform: translateY(-2px);
+        }
+        
+        /* Helper Text at Bottom */
         .scan-helper {
             position: absolute;
-            bottom: 60px;
+            bottom: 40px;
             left: 0;
             right: 0;
-            color: rgba(255,255,255,0.9);
+            color: rgba(255,255,255,0.95);
             text-align: center;
-            font-size: 13px;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            font-size: 14px;
+            font-weight: 600;
+            text-shadow: 0 2px 12px rgba(0,0,0,0.7);
             z-index: 3;
+            padding: 12px 20px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            max-width: 320px;
+            margin: 0 auto;
         }
         
         /* Progress Ring */
@@ -362,8 +455,9 @@ def render_camera_view() -> None:
         async_processing=True,
     )
 
-    # Dynamic HUD based on status
+    # Dynamic HUD with iOS grid overlay
     hud_html = f"""
+    <div class="camera-grid"></div>
     <div class="scan-overlay"></div>
     <div class="hud-top">
         <div class="pill live"><span class="dot"></span>{messages['live']}</div>
@@ -383,8 +477,14 @@ def render_camera_view() -> None:
     
     hud_html += f"""
     <div class="hud-bottom">
-        <div class="quick-action" onclick="alert('{messages['flash_tip']}')">{messages['flash']}</div>
-        <div class="capture-btn" onclick="console.log('manual capture')">⬤</div>
+        <div class="side-control" onclick="alert('{messages['flash_tip']}')" title="Flash">💡</div>
+        <div class="capture-btn" onclick="console.log('manual capture')" title="Capture">⬤</div>
+        <div class="side-control" onclick="alert('Switch Camera')" title="Switch">🔄</div>
+    </div>
+    <div class="scan-helper">
+        📸 {messages.get('camera_guide', 'وجّه الكاميرا نحو المنتج للمسح التلقائي')}
+    </div>
+    """
         <div class="quick-action" onclick="alert('{messages['guide_tip']}')">{messages['guides']}</div>
     </div>
     <div class="scan-helper">{messages['helper_text']}</div>

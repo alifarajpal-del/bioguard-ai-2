@@ -1,82 +1,415 @@
-"""Vault view for medical documents."""
+"""Medical Vault view with modern grid-based card design."""
 
 import streamlit as st
 from datetime import datetime
+from ui_components.theme_wheel import get_current_theme
 
 
 def render_vault() -> None:
-    st.markdown("## 📁 Medical Vault")
-    st.markdown("Securely store and manage your medical records, X-rays, and lab results.")
-
+    """Render medical vault with modern grid design"""
+    theme = get_current_theme()
+    
+    # Inject vault-specific CSS
+    _inject_vault_css(theme)
+    
+    st.markdown("## 🗄️ المخزن الطبي")
+    
     # Initialize medical history in session state
     if "medical_history" not in st.session_state:
         st.session_state.medical_history = []
-
-    _upload_box()
+    
+    # Category Grid
+    _render_category_grid(theme)
+    
     st.divider()
-    _files_list()
+    
+    # Upload Section
+    _upload_box(theme)
+    
+    st.divider()
+    
+    # Documents List
+    _files_list(theme)
 
 
-def _upload_box() -> None:
+def _inject_vault_css(theme: dict) -> None:
+    """Inject modern vault CSS with grid layout"""
+    css = f"""
+    <style>
+        /* Category Card */
+        .category-card {{
+            background: {theme['card_bg']};
+            border-radius: 20px;
+            padding: 28px 20px;
+            text-align: center;
+            border: 2px solid {theme['secondary']};
+            box-shadow: 0 8px 24px {theme['primary']}15;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }}
+        
+        .category-card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--card-accent), var(--card-accent-light));
+        }}
+        
+        .category-card:hover {{
+            transform: translateY(-8px);
+            box-shadow: 0 16px 40px {theme['primary']}25;
+            border-color: {theme['primary']};
+        }}
+        
+        .category-icon {{
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin: 0 auto 12px;
+            background: linear-gradient(135deg, var(--card-accent), var(--card-accent-light));
+            box-shadow: 0 8px 24px var(--card-accent)30;
+            transition: all 0.3s ease;
+        }}
+        
+        .category-card:hover .category-icon {{
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 12px 32px var(--card-accent)40;
+        }}
+        
+        .category-title {{
+            font-size: 16px;
+            font-weight: 800;
+            color: {theme['text']};
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        
+        .category-count {{
+            font-size: 13px;
+            color: {theme['text']};
+            opacity: 0.7;
+            font-weight: 600;
+        }}
+        
+        .category-badge {{
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: linear-gradient(135deg, var(--card-accent), var(--card-accent-light));
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 800;
+            box-shadow: 0 4px 12px var(--card-accent)30;
+        }}
+        
+        /* Upload Box */
+        .upload-box {{
+            background: linear-gradient(135deg, {theme['secondary']} 0%, {theme['background']} 100%);
+            border: 3px dashed {theme['primary']};
+            border-radius: 20px;
+            padding: 40px 20px;
+            text-align: center;
+            box-shadow: 0 8px 24px {theme['primary']}15;
+            transition: all 0.3s ease;
+        }}
+        
+        .upload-box:hover {{
+            border-color: {theme['accent']};
+            box-shadow: 0 12px 32px {theme['primary']}25;
+            transform: scale(1.02);
+        }}
+        
+        .upload-icon {{
+            font-size: 64px;
+            margin-bottom: 16px;
+            animation: float 3s ease-in-out infinite;
+        }}
+        
+        @keyframes float {{
+            0%, 100% {{ transform: translateY(0px); }}
+            50% {{ transform: translateY(-10px); }}
+        }}
+        
+        .upload-title {{
+            font-weight: 800;
+            color: {theme['primary']};
+            font-size: 20px;
+            margin-bottom: 8px;
+        }}
+        
+        .upload-subtitle {{
+            color: {theme['text']};
+            font-size: 14px;
+            opacity: 0.8;
+            font-weight: 600;
+        }}
+        
+        /* Document Card */
+        .doc-card {{
+            background: {theme['card_bg']};
+            border: 2px solid {theme['secondary']};
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 4px 16px {theme['primary']}10;
+            transition: all 0.3s ease;
+            margin-bottom: 12px;
+        }}
+        
+        .doc-card:hover {{
+            transform: translateX(4px);
+            box-shadow: 0 8px 24px {theme['primary']}20;
+            border-color: {theme['primary']};
+        }}
+        
+        .doc-icon-wrapper {{
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, {theme['primary']}, {theme['accent']});
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 6px 20px {theme['primary']}30;
+            flex-shrink: 0;
+        }}
+        
+        .doc-info {{
+            flex: 1;
+        }}
+        
+        .doc-name {{
+            font-weight: 700;
+            color: {theme['text']};
+            font-size: 16px;
+            margin-bottom: 6px;
+        }}
+        
+        .doc-meta {{
+            color: {theme['text']};
+            font-size: 13px;
+            opacity: 0.6;
+            font-weight: 500;
+        }}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def _render_category_grid(theme: dict) -> None:
+    """Render medical document categories in grid layout"""
+    st.markdown("### 📂 فئات الملفات الطبية")
+    
+    # Define categories with icons and colors
+    categories = [
+        {
+            "id": "tests",
+            "title": "التحاليل",
+            "subtitle": "Lab Tests",
+            "icon": "🧪",
+            "color": "#3b82f6",
+            "color_light": "#60a5fa",
+            "count": sum(1 for doc in st.session_state.medical_history if "test" in doc.get("name", "").lower() or "lab" in doc.get("name", "").lower())
+        },
+        {
+            "id": "reports",
+            "title": "التقارير",
+            "subtitle": "Medical Reports",
+            "icon": "📋",
+            "color": "#8b5cf6",
+            "color_light": "#a78bfa",
+            "count": sum(1 for doc in st.session_state.medical_history if "report" in doc.get("name", "").lower())
+        },
+        {
+            "id": "prescriptions",
+            "title": "الوصفات",
+            "subtitle": "Prescriptions",
+            "icon": "💊",
+            "color": "#ec4899",
+            "color_light": "#f472b6",
+            "count": sum(1 for doc in st.session_state.medical_history if "prescription" in doc.get("name", "").lower() or "med" in doc.get("name", "").lower())
+        },
+        {
+            "id": "vaccines",
+            "title": "التطعيمات",
+            "subtitle": "Vaccinations",
+            "icon": "💉",
+            "color": "#10b981",
+            "color_light": "#34d399",
+            "count": sum(1 for doc in st.session_state.medical_history if "vaccine" in doc.get("name", "").lower() or "vac" in doc.get("name", "").lower())
+        },
+        {
+            "id": "xrays",
+            "title": "الأشعة",
+            "subtitle": "X-Rays & Scans",
+            "icon": "🏥",
+            "color": "#f59e0b",
+            "color_light": "#fbbf24",
+            "count": sum(1 for doc in st.session_state.medical_history if "xray" in doc.get("name", "").lower() or "scan" in doc.get("name", "").lower())
+        },
+        {
+            "id": "other",
+            "title": "أخرى",
+            "subtitle": "Other Documents",
+            "icon": "📄",
+            "color": "#64748b",
+            "color_light": "#94a3b8",
+            "count": len(st.session_state.medical_history) - sum(cat["count"] for cat in [categories[i] for i in range(5)])
+        },
+    ]
+    
+    # Create 3-column grid
+    cols = st.columns(3, gap="large")
+    
+    for idx, category in enumerate(categories):
+        with cols[idx % 3]:
+            # Store selected category in session state if clicked
+            category_key = f"category_{category['id']}"
+            
+            st.markdown(
+                f"""
+                <div class="category-card" style="--card-accent: {category['color']}; --card-accent-light: {category['color_light']};">
+                    {f'<div class="category-badge">{category["count"]}</div>' if category["count"] > 0 else ''}
+                    <div class="category-icon">{category['icon']}</div>
+                    <div class="category-title">{category['title']}</div>
+                    <div class="category-count">{category['subtitle']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            # Clickable button (invisible but functional)
+            if st.button(
+                f"عرض {category['title']}",
+                key=category_key,
+                use_container_width=True,
+                type="secondary",
+                help=f"عرض جميع ملفات {category['title']}"
+            ):
+                st.session_state.selected_category = category['id']
+                st.toast(f"📂 عرض فئة: {category['title']}", icon="✨")
+
+
+def _upload_box(theme: dict) -> None:
+    """Render modern upload box"""
     st.markdown(
-        """
-        <div style="border:2px dashed #3b82f6;border-radius:16px;padding:32px;text-align:center;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%);box-shadow:0 4px 12px rgba(59,130,246,0.15);">
-            <div style="font-size:48px;margin-bottom:12px;">🏥</div>
-            <div style="font-weight:700;color:#1e3a8a;font-size:18px;margin-bottom:8px;">Drag & Drop Medical Records</div>
-            <div style="color:#3b82f6;font-size:14px;">PDF, JPG, PNG • X-Rays • Lab Results • Prescriptions</div>
-            <div style="color:#64748b;font-size:12px;margin-top:8px;">Up to 10MB per file</div>
+        f"""
+        <div class="upload-box">
+            <div class="upload-icon">🏥</div>
+            <div class="upload-title">اسحب الملفات هنا</div>
+            <div class="upload-subtitle">PDF, JPG, PNG • أشعة • تحاليل • وصفات</div>
+            <div style="color: {theme['text']}; font-size: 12px; margin-top: 12px; opacity: 0.6;">حتى 10MB لكل ملف</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
     
     file = st.file_uploader(
-        "Upload Medical Document",
+        "رفع مستند طبي",
         type=["pdf", "jpg", "jpeg", "png"],
         label_visibility="collapsed",
-        key="vault_uploader"
+        key="vault_uploader",
+        help="اختر ملف طبي للرفع"
     )
     
     if file:
+        # Determine category and icon based on filename
+        name_lower = file.name.lower()
+        if "test" in name_lower or "lab" in name_lower or "تحليل" in name_lower:
+            icon = "🧪"
+            category = "tests"
+        elif "prescription" in name_lower or "med" in name_lower or "وصفة" in name_lower:
+            icon = "💊"
+            category = "prescriptions"
+        elif "vaccine" in name_lower or "vac" in name_lower or "تطعيم" in name_lower:
+            icon = "💉"
+            category = "vaccines"
+        elif "xray" in name_lower or "scan" in name_lower or "أشعة" in name_lower:
+            icon = "🏥"
+            category = "xrays"
+        elif "report" in name_lower or "تقرير" in name_lower:
+            icon = "📋"
+            category = "reports"
+        else:
+            icon = "📄"
+            category = "other"
+        
         # Save to session state
         file_info = {
             "name": file.name,
             "type": file.type,
+            "category": category,
             "size": f"{file.size / 1024:.1f}KB" if file.size < 1024*1024 else f"{file.size / (1024*1024):.1f}MB",
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "icon": "🧪" if "lab" in file.name.lower() else "💊" if "prescription" in file.name.lower() or "med" in file.name.lower() else "📄",
+            "icon": icon,
             "data": file.getvalue()
         }
         
         # Check if not duplicate
         if not any(f["name"] == file.name for f in st.session_state.medical_history):
             st.session_state.medical_history.append(file_info)
-            st.toast("✅ Added to your Medical Profile!", icon="🏥")
-            st.success(f"Successfully uploaded: **{file.name}**")
+            st.toast("✅ تمت الإضافة إلى ملفك الطبي!", icon="🏥")
+            st.success(f"تم الرفع بنجاح: **{file.name}**")
+            st.rerun()  # Refresh to update category counts
         else:
-            st.warning(f"File **{file.name}** already exists in your vault.")
+            st.warning(f"الملف **{file.name}** موجود بالفعل في المخزن.")
 
 
-def _files_list() -> None:
-    st.markdown("### 📋 Your Medical Documents")
+def _files_list(theme: dict) -> None:
+    """Render documents list with modern card design"""
+    st.markdown("### 📋 مستنداتك الطبية")
     
     if not st.session_state.medical_history:
-        st.info("No documents uploaded yet. Start by uploading your first medical record above! 📤")
+        st.info("لا توجد مستندات حتى الآن. ابدأ برفع أول ملف طبي! 📤")
         return
     
-    st.markdown(f"**{len(st.session_state.medical_history)} document(s) in your vault**")
+    # Filter by selected category if any
+    selected_category = st.session_state.get("selected_category", None)
     
-    for idx, doc in enumerate(st.session_state.medical_history):
-        col1, col2, col3 = st.columns([3, 1, 1])
+    if selected_category:
+        filtered_docs = [doc for doc in st.session_state.medical_history if doc.get("category") == selected_category]
+        st.markdown(f"**عرض فئة: {selected_category.upper()}** ({len(filtered_docs)} ملف)")
+        
+        if st.button("🔙 عرض الكل", type="secondary"):
+            st.session_state.selected_category = None
+            st.rerun()
+    else:
+        filtered_docs = st.session_state.medical_history
+        st.markdown(f"**{len(filtered_docs)} مستند في المخزن**")
+    
+    # Display documents
+    for idx, doc in enumerate(filtered_docs):
+        col1, col2, col3 = st.columns([5, 1, 1])
         
         with col1:
             st.markdown(
                 f"""
-                <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-                    <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#3b82f6 0%,#8b5cf6 100%);color:white;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(59,130,246,0.3);">{doc['icon']}</div>
-                    <div style="flex:1;">
-                        <div style="font-weight:700;color:#0f172a;font-size:15px;">{doc['name']}</div>
-                        <div style="color:#64748b;font-size:12px;margin-top:4px;">{doc['size']} • {doc['date']}</div>
+                <div class="doc-card">
+                    <div class="doc-icon-wrapper">{doc['icon']}</div>
+                    <div class="doc-info">
+                        <div class="doc-name">{doc['name']}</div>
+                        <div class="doc-meta">{doc['size']} • {doc['date']}</div>
                     </div>
                 </div>
                 """,
@@ -84,11 +417,13 @@ def _files_list() -> None:
             )
         
         with col2:
-            if st.button("👁️ View", key=f"view_{idx}", use_container_width=True):
-                st.info(f"Viewing: {doc['name']}")
+            if st.button("👁️", key=f"view_{idx}", use_container_width=True, help="عرض"):
+                st.info(f"عرض: {doc['name']}")
         
         with col3:
-            if st.button("🗑️ Delete", key=f"del_{idx}", use_container_width=True, type="secondary"):
-                st.session_state.medical_history.pop(idx)
-                st.toast("🗑️ Document deleted", icon="✅")
+            if st.button("🗑️", key=f"del_{idx}", use_container_width=True, type="secondary", help="حذف"):
+                # Find the actual index in the original list
+                actual_idx = st.session_state.medical_history.index(doc)
+                st.session_state.medical_history.pop(actual_idx)
+                st.toast("🗑️ تم حذف المستند", icon="✅")
                 st.rerun()
