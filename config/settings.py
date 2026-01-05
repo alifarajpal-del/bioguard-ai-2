@@ -15,7 +15,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Google OAuth Configuration
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "concise-perigee-468806-m8")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8501/auth/google/callback")
 
@@ -260,7 +260,7 @@ SUPPORTED_LANGUAGES = {
     "es": "Español",
     "de": "Deutsch",
 }
-DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "ar")
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 
 # ============== Auto-Translation ==============
 AUTO_TRANSLATE_RESULTS = os.getenv("AUTO_TRANSLATE_RESULTS", "true").lower() == "true"

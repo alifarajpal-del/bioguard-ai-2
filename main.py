@@ -38,7 +38,7 @@ def init_session_state() -> None:
     if "current_page" not in st.session_state:
         st.session_state.current_page = "home"
     if "active_theme" not in st.session_state:
-        st.session_state.active_theme = "pastel"
+        st.session_state.active_theme = "dark"
     if "analysis_history" not in st.session_state:
         st.session_state.analysis_history = []
     if "ai_provider" not in st.session_state:

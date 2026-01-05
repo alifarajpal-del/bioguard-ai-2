@@ -50,14 +50,14 @@ THEMES: Dict[str, Dict[str, str]] = {
 
 def get_current_theme() -> Dict[str, Any]:
     """Return the active theme with a safe fallback."""
-    key = st.session_state.get("active_theme", "pastel")
-    return THEMES.get(key, THEMES["pastel"])
+    key = st.session_state.get("active_theme", "dark")
+    return THEMES.get(key, THEMES["dark"])
 
 
 def render_theme_selector():
     """Render a simple button to cycle through themes."""
     themes = list(THEMES.keys())
-    current = st.session_state.get("active_theme", "pastel")
+    current = st.session_state.get("active_theme", "dark")
     idx = themes.index(current)
     next_idx = (idx + 1) % len(themes)
     
@@ -481,7 +481,7 @@ def render_theme_wheel() -> None:
         if st.button("🎲 تدوير العجلة!", use_container_width=True, type="primary", key="spin_wheel"):
             # Select random theme
             theme_keys = list(THEMES.keys())
-            current = st.session_state.get("active_theme", "pastel")
+            current = st.session_state.get("active_theme", "dark")
             available = [t for t in theme_keys if t != current]
             new_theme = random.choice(available) if available else current
             

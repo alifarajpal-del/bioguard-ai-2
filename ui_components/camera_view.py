@@ -407,7 +407,7 @@ def render_camera_view() -> None:
     if 'analysis_history' not in st.session_state:
         st.session_state.analysis_history = []
     if 'language' not in st.session_state:
-        st.session_state.language = 'ar'
+        st.session_state.language = 'en'
 
     if not WEBRTC_AVAILABLE:
         _render_upload_fallback()
@@ -690,14 +690,15 @@ def render_camera_view() -> None:
                     st.markdown(f"**{idx+1}.** {analysis.get('product', 'Unknown')} - Score: {analysis.get('health_score', 'N/A')}")
                     
     else:
-        st.info(messages['allow_camera'])
+        st.info(messages.get('allow_camera', 'Allow camera access and refresh, or upload a photo below.'))
         st.markdown("</div>", unsafe_allow_html=True)
-        with st.expander(messages['how_to_scan']):
-            st.markdown(messages['scan_instructions'])
+        with st.expander(messages.get('how_to_scan', 'How to scan')):
+            st.markdown(messages.get('scan_instructions', '1) Allow camera • 2) Point to product • 3) Wait or upload below'))
+        _render_upload_fallback()
         return
 
 
-def _get_ui_messages(language: str = 'ar') -> Dict[str, str]:
+def _get_ui_messages(language: str = 'en') -> Dict[str, str]:
     """
     Get UI messages in specified language.
     

@@ -238,8 +238,8 @@ def render_oauth_login() -> None:
             <div class="oauth-logo">🧬</div>
             <div class="oauth-title">BioGuard AI</div>
             <div class="oauth-subtitle">
-                مساعدك الذكي للصحة والتغذية<br>
-                Privacy-First | Real-Time Analysis | Predictive Intelligence
+                Secure health & nutrition assistant<br>
+                Privacy-first · Real-time · Predictive
             </div>
         </div>
     ''', unsafe_allow_html=True)
@@ -252,6 +252,34 @@ def render_oauth_login() -> None:
         )
         st.session_state.oauth_error = None
     
+    # Primary email/password form
+    st.markdown('<div class="oauth-traditional-form">', unsafe_allow_html=True)
+    st.markdown('<div class="oauth-form-title">Sign in with email</div>', unsafe_allow_html=True)
+    with st.form("password_login"):
+        email = st.text_input("Email", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", placeholder="••••••••")
+        submit = st.form_submit_button("Sign In", use_container_width=True)
+        if submit:
+            if email and password:
+                profile = {
+                    "user_id": email,
+                    "email": email,
+                    "name": email.split("@")[0],
+                    "provider": "password",
+                }
+                token = create_or_login_user(profile)
+                st.session_state.user_id = profile["user_id"]
+                st.session_state.user_profile = profile
+                st.session_state.authenticated = True
+                st.session_state.auth_token = token
+                st.success("Welcome back!")
+                st.rerun()
+            else:
+                st.warning("Please enter both email and password.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="oauth-divider">or continue with</div>', unsafe_allow_html=True)
+
     # OAuth Buttons
     st.markdown('<div class="oauth-buttons">', unsafe_allow_html=True)
     
@@ -284,88 +312,15 @@ def render_oauth_login() -> None:
             </a>
         ''', unsafe_allow_html=True)
     
+    if not google_provider:
+        st.info("Google OAuth is not configured. Set GOOGLE_CLIENT_ID/SECRET to enable.")
+    if not apple_provider:
+        st.info("Apple OAuth is not configured. Set APPLE_CLIENT_ID/TEAM_ID/KEY_ID/PRIVATE_KEY to enable.")
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Divider
-    st.markdown('<div class="oauth-divider">أو</div>', unsafe_allow_html=True)
+    st.markdown('''<div style="text-align:center; margin-top:12px; font-size:14px;">Don't have an account? <b>Create one by signing in</b></div>''', unsafe_allow_html=True)
     
-    # Traditional Login Form
-    st.markdown('<div class="oauth-traditional-form">', unsafe_allow_html=True)
-    st.markdown('<div class="oauth-form-title">تسجيل الدخول التقليدي</div>', unsafe_allow_html=True)
-    
-    with st.form("traditional_login"):
-        user_id = st.text_input("🆔 User ID", placeholder="user_123", help="معرف فريد لحسابك")
-        name = st.text_input("👤 الاسم", placeholder="أحمد محمد")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            age = st.number_input("🎂 العمر", min_value=1, max_value=120, value=30)
-            weight = st.number_input("⚖️ الوزن (كجم)", min_value=20.0, max_value=300.0, value=70.0)
-        with col2:
-            height = st.number_input("📏 الطول (سم)", min_value=100, max_value=250, value=170)
-        
-        allergies = st.text_input("🚫 الحساسية", placeholder="الفول السوداني، اللاكتوز")
-        conditions = st.text_input("🏥 الحالات الصحية", placeholder="السكري، ضغط الدم")
-        
-        submit = st.form_submit_button("🚀 متابعة", use_container_width=True)
-        
-        if submit:
-            if user_id and name:
-                profile = {
-                    "user_id": user_id,
-                    "name": name,
-                    "age": age,
-                    "weight": weight,
-                    "height": height,
-                    "allergies": [a.strip() for a in allergies.split(",") if a.strip()],
-                    "medical_conditions": [c.strip() for c in conditions.split(",") if c.strip()],
-                    "provider": "traditional",
-                }
-                
-                try:
-                    token = create_or_login_user(profile)
-                    st.session_state.user_id = user_id
-                    st.session_state.user_profile = profile
-                    st.session_state.authenticated = True
-                    st.session_state.auth_token = token
-                    st.success("✅ مرحباً بك!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ حدث خطأ: {e}")
-            else:
-                st.warning("⚠️ يرجى إدخال User ID والاسم")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Features
-    st.markdown('''
-        <div class="oauth-features">
-            <div class="oauth-feature">
-                <span class="oauth-feature-icon">🔐</span>
-                <span>خصوصية تامة</span>
-            </div>
-            <div class="oauth-feature">
-                <span class="oauth-feature-icon">🧠</span>
-                <span>ذكاء اصطناعي</span>
-            </div>
-            <div class="oauth-feature">
-                <span class="oauth-feature-icon">📊</span>
-                <span>تحليل فوري</span>
-            </div>
-            <div class="oauth-feature">
-                <span class="oauth-feature-icon">🔮</span>
-                <span>توقعات صحية</span>
-            </div>
-        </div>
-    ''', unsafe_allow_html=True)
-    
-    # Privacy Notice
-    st.markdown('''
-        <div class="oauth-privacy">
-            بتسجيل الدخول، أنت توافق على <a href="#">شروط الخدمة</a> و<a href="#">سياسة الخصوصية</a>.<br>
-            بياناتك الصحية مشفرة ومحمية بالكامل.
-        </div>
-    ''', unsafe_allow_html=True)
+    st.markdown('''<div class="oauth-privacy">By signing in you agree to our Terms and Privacy Policy.</div>''', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
