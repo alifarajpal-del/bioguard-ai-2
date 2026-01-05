@@ -244,7 +244,16 @@ def render_oauth_login() -> None:
 
     st.markdown('<div class="oauth-header">', unsafe_allow_html=True)
     if logo_image:
-        st.image(logo_image, width=200, caption=None)
+        # Convert logo to base64 for proper CSS centering
+        from io import BytesIO
+        import base64
+        buffer = BytesIO()
+        logo_image.save(buffer, format="PNG")
+        logo_b64 = base64.b64encode(buffer.getvalue()).decode()
+        st.markdown(
+            f'<img src="data:image/png;base64,{logo_b64}" class="oauth-logo-img" alt="BioGuard Logo"/>',
+            unsafe_allow_html=True
+        )
     else:
         st.markdown('<div class="oauth-logo">🧬</div>', unsafe_allow_html=True)
     st.markdown(

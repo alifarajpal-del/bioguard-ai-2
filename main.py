@@ -54,10 +54,10 @@ except ImportError:
 from ui_components.camera_view import render_camera_view as render_camera_legacy
 
 PAGE_SUBTITLES = {
-    "dashboard": "لوحة التحكم الصحية",
-    "scan": "الكاميرا الذكية",
-    "vault": "المخزن الطبي",
-    "settings": "الإعدادات والثيم والمزامنة",
+    "dashboard": "Health Dashboard",
+    "scan": "Smart Camera",
+    "vault": "Medical Vault",
+    "settings": "Settings & Theme & Sync",
 }
 
 
