@@ -5,6 +5,7 @@ Displays health metrics with rounded cards, soft shadows, and circular icons.
 
 import streamlit as st
 import plotly.graph_objects as go
+from plotly.colors import hex_to_rgb
 import pandas as pd
 from datetime import datetime, timedelta
 from ui_components.theme_wheel import get_current_theme
@@ -204,6 +205,10 @@ def _health_score_trend(theme: dict) -> None:
     dates = pd.date_range(end=datetime.now(), periods=14, freq="D")
     scores = [72 + i % 6 + (i * 0.6) for i in range(len(dates))]
     
+    # Convert hex color to RGBA with transparency
+    rgb = hex_to_rgb(theme['primary'])
+    fillcolor = f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, 0.2)"
+    
     fig = go.Figure()
     fig.add_scatter(
         x=dates, 
@@ -212,7 +217,7 @@ def _health_score_trend(theme: dict) -> None:
         line=dict(color=theme['primary'], width=4, shape='spline'),
         marker=dict(size=8, color=theme['accent'], line=dict(width=2, color='white')),
         fill='tozeroy',
-        fillcolor=f"{theme['primary']}20"
+        fillcolor=fillcolor
     )
     fig.update_layout(
         height=300,
