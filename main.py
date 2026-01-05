@@ -70,6 +70,10 @@ def init_session_state() -> None:
         st.session_state.ai_provider = "gemini"
     if "use_refactored_camera" not in st.session_state:
         st.session_state.use_refactored_camera = REFACTORED_CAMERA_AVAILABLE
+    if "swipe_next" not in st.session_state:
+        st.session_state.swipe_next = False
+    if "swipe_prev" not in st.session_state:
+        st.session_state.swipe_prev = False
 
 
 # ============== Authentication UI ==============
@@ -169,6 +173,25 @@ def main() -> None:
     if not st.session_state.authenticated:
         render_auth_screen()
         return
+
+    def _handle_swipe_navigation() -> None:
+        """Update current_page based on swipe gestures."""
+        pages = ["home", "scan", "vault", "settings"]
+        current = st.session_state.get("current_page", "home")
+
+        if st.session_state.get("swipe_next"):
+            st.session_state.swipe_next = False
+            idx = pages.index(current) if current in pages else 0
+            st.session_state.current_page = pages[(idx + 1) % len(pages)]
+            st.rerun()
+
+        if st.session_state.get("swipe_prev"):
+            st.session_state.swipe_prev = False
+            idx = pages.index(current) if current in pages else 0
+            st.session_state.current_page = pages[(idx - 1) % len(pages)]
+            st.rerun()
+
+    _handle_swipe_navigation()
 
     page = get_active_page()
     if page == "home":

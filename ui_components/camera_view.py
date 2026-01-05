@@ -72,6 +72,24 @@ def _inject_camera_css() -> None:
             border-radius: 0 !important;
             transform: scaleX(-1); /* mirror for selfie */
         }
+
+        /* Force embedded WebRTC video to fill and sit behind HUD */
+        .streamlit-webrtc video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+        .streamlit-webrtc {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: -1; /* background layer */
+        }
+        .streamlit-webrtc .stVideo {
+            display: none;
+        }
         
         /* CRITICAL: Hide ALL default WebRTC controls */
         [data-testid="stWebRtc"] button,

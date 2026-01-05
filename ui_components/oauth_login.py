@@ -3,12 +3,12 @@ OAuth Login UI Component.
 Beautiful login screen with Google and Apple Sign-In buttons.
 """
 
-import base64
-import os
 import secrets
+from pathlib import Path
 from typing import Optional
 
 import streamlit as st
+from PIL import Image
 
 from services.oauth_providers import get_oauth_provider
 from services.auth import create_or_login_user
@@ -16,15 +16,13 @@ from ui_components.theme_wheel import get_current_theme
 from database.db_manager import get_db_manager
 
 
-def _load_logo_data_uri() -> Optional[str]:
-    """Load branding logo and return data URI if file exists."""
-    logo_path = os.path.join("assets", "branding", "bioguard-shield.png")
-    if not os.path.exists(logo_path):
+def _load_logo_image() -> Optional[Image.Image]:
+    """Load branding logo from local assets; return None on failure."""
+    logo_path = Path(__file__).parent / "assets" / "logo.png"
+    if not logo_path.exists():
         return None
     try:
-        with open(logo_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-        return f"data:image/png;base64,{encoded}"
+        return Image.open(logo_path)
     except Exception:
         return None
 
@@ -247,13 +245,7 @@ def render_oauth_login() -> None:
     """Render OAuth login screen with Google and Apple Sign-In."""
     _inject_oauth_css()
 
-    # Load logo asset if available
-    logo_data_uri = _load_logo_data_uri()
-    logo_html = (
-        f'<img src="{logo_data_uri}" alt="BioGuard AI Logo" class="oauth-logo-img" />'
-        if logo_data_uri
-        else '<div class="oauth-logo">🧬</div>'
-    )
+    logo_image = _load_logo_image()
     
     # Initialize session state
     if "oauth_state" not in st.session_state:
@@ -263,21 +255,23 @@ def render_oauth_login() -> None:
     
     # Container
     st.markdown('<div class="oauth-login-container">', unsafe_allow_html=True)
-    
-    # Header
+
+    st.markdown('<div class="oauth-header">', unsafe_allow_html=True)
+    if logo_image:
+        st.image(logo_image, width=200, caption=None)
+    else:
+        st.markdown('<div class="oauth-logo">🧬</div>', unsafe_allow_html=True)
     st.markdown(
-        f'''
-        <div class="oauth-header">
-            {logo_html}
-            <div class="oauth-title">BioGuard AI</div>
-            <div class="oauth-subtitle">
-                Secure health & nutrition assistant<br>
-                Privacy-first · Real-time · Predictive
-            </div>
+        '''
+        <div class="oauth-title">BioGuard AI</div>
+        <div class="oauth-subtitle">
+            Secure health & nutrition assistant<br>
+            Privacy-first · Real-time · Predictive
         </div>
-    ''',
+        ''',
         unsafe_allow_html=True,
     )
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Error message
     if st.session_state.oauth_error:

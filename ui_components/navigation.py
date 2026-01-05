@@ -1,6 +1,7 @@
 """Modern bottom navigation bar with iOS-style design."""
 
 import streamlit as st
+import streamlit.components.v1 as components
 from ui_components.theme_wheel import get_current_theme
 
 
@@ -140,10 +141,28 @@ def render_bottom_navigation():
             border: none !important;
             transform: none !important;
         }}
+
+        /* Swipe handle hint */
+        .swipe-handle {{
+            position: fixed;
+            bottom: 90px;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: {theme['text']};
+            z-index: 99998;
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="swipe-handle">إسحب للأعلى للصفحة التالية • اسحب للأسفل للرجوع</div>', unsafe_allow_html=True)
 
     # Bottom Navigation Bar
     nav_container = st.container()
@@ -175,6 +194,33 @@ def render_bottom_navigation():
                     st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # Touch swipe listener injected once per render
+        components.html(
+                """
+                <script>
+                    let startY = null;
+                    document.addEventListener('touchstart', function(e) {
+                        startY = e.touches[0].clientY;
+                    });
+                    document.addEventListener('touchend', function(e) {
+                        if (startY === null) return;
+                        let endY = e.changedTouches[0].clientY;
+                        let deltaY = startY - endY;
+                        if (deltaY > 50) {
+                            window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_next', value: true}, '*');
+                        }
+                        if (deltaY < -50) {
+                            window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_prev', value: true}, '*');
+                        }
+                        startY = null;
+                    });
+                </script>
+                """,
+                height=0,
+                width=0,
+                key="swipe_listener",
+        )
 
 
 def get_active_page() -> str:
