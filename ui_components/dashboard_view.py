@@ -37,11 +37,11 @@ def _inject_dashboard_css(theme: dict) -> None:
     css = f"""
     <style>
         .stat-card {{
-            background: {theme['card_bg']};
+            background: var(--card-bg);
             border-radius: 20px;
             padding: 24px;
-            box-shadow: 0 8px 24px {theme['primary']}15;
-            border: 2px solid {theme['secondary']};
+            box-shadow: 0 8px 24px var(--primary)15;
+            border: 2px solid var(--secondary);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
@@ -59,8 +59,8 @@ def _inject_dashboard_css(theme: dict) -> None:
         
         .stat-card:hover {{
             transform: translateY(-6px);
-            box-shadow: 0 16px 40px {theme['primary']}25;
-            border-color: {theme['primary']};
+            box-shadow: 0 16px 40px var(--primary)25;
+            border-color: var(--primary);
         }}
         
         .icon-circle {{
@@ -77,7 +77,7 @@ def _inject_dashboard_css(theme: dict) -> None:
         }}
         
         .stat-label {{
-            color: {theme['text']};
+            color: var(--text);
             font-weight: 700;
             font-size: 14px;
             text-transform: uppercase;
@@ -87,7 +87,7 @@ def _inject_dashboard_css(theme: dict) -> None:
         }}
         
         .stat-value {{
-            color: {theme['text']};
+            color: var(--text);
             font-weight: 900;
             font-size: 36px;
             line-height: 1;
@@ -95,19 +95,19 @@ def _inject_dashboard_css(theme: dict) -> None:
         }}
         
         .stat-delta {{
-            color: {theme['text']};
+            color: var(--text);
             font-size: 13px;
             font-weight: 600;
             opacity: 0.6;
         }}
         
         .activity-card {{
-            background: {theme['card_bg']};
+            background: var(--card-bg);
             border-radius: 16px;
             padding: 18px;
             margin-bottom: 12px;
-            border: 2px solid {theme['secondary']};
-            box-shadow: 0 4px 12px {theme['primary']}10;
+            border: 2px solid var(--secondary);
+            box-shadow: 0 4px 12px var(--primary)10;
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
@@ -116,8 +116,8 @@ def _inject_dashboard_css(theme: dict) -> None:
         
         .activity-card:hover {{
             transform: translateX(4px);
-            box-shadow: 0 6px 20px {theme['primary']}20;
-            border-color: {theme['primary']};
+            box-shadow: 0 6px 20px var(--primary)20;
+            border-color: var(--primary);
         }}
         
         .activity-icon {{
@@ -132,11 +132,11 @@ def _inject_dashboard_css(theme: dict) -> None:
         }}
         
         .chart-container {{
-            background: {theme['card_bg']};
+            background: var(--card-bg);
             border-radius: 20px;
             padding: 24px;
-            border: 2px solid {theme['secondary']};
-            box-shadow: 0 8px 24px {theme['primary']}15;
+            border: 2px solid var(--secondary);
+            box-shadow: 0 8px 24px var(--primary)15;
         }}
     </style>
     """

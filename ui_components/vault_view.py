@@ -11,7 +11,7 @@ def render_vault() -> None:
     
     # Back to home button
     if st.button("🔙 رجوع إلى الرئيسية", key="vault_back_home"):
-        st.session_state.active_page = "home"
+        st.session_state.current_page = "home"
         st.rerun()
     
     # Inject vault-specific CSS

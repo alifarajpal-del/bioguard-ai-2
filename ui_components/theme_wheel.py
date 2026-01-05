@@ -5,55 +5,25 @@ import streamlit as st
 import random
 
 THEMES: Dict[str, Dict[str, str]] = {
-    "lavender": {
-        "name": "Lavender Dream",
-        "primary": "#6366f1",        # Indigo
-        "secondary": "#e0e7ff",      # Light indigo
-        "background": "#faf5ff",     # Lightest purple
-        "text": "#1e1b4b",           # Dark indigo (WCAG AAA)
-        "accent": "#8b5cf6",         # Purple
-        "card_bg": "#ffffff",
-        "emoji": "💜",
+    "pastel": {
+        "name": "Pastel",
+        "background": "#F5F7FB",
+        "card_bg": "#FFFFFF",
+        "primary": "#8B5CF6",
+        "secondary": "#60A5FA",
+        "accent": "#22C55E",
+        "text": "#1E293B",
+        "emoji": "🎨",
     },
-    "sky": {
-        "name": "Sky Breeze",
-        "primary": "#0ea5e9",        # Sky blue
-        "secondary": "#dbeafe",      # Light blue
-        "background": "#f0f9ff",     # Lightest blue
-        "text": "#0c4a6e",           # Dark blue (WCAG AAA)
-        "accent": "#3b82f6",         # Blue
-        "card_bg": "#ffffff",
-        "emoji": "🌤️",
-    },
-    "rose": {
-        "name": "Rose Garden",
-        "primary": "#ec4899",        # Pink
-        "secondary": "#fce7f3",      # Light pink
-        "background": "#fdf2f8",     # Lightest pink
-        "text": "#831843",           # Dark pink (WCAG AAA)
-        "accent": "#f472b6",         # Light pink accent
-        "card_bg": "#ffffff",
-        "emoji": "🌸",
-    },
-    "mint": {
-        "name": "Mint Fresh",
-        "primary": "#10b981",        # Green
-        "secondary": "#d1fae5",      # Light green
-        "background": "#f0fdf4",     # Lightest green
-        "text": "#064e3b",           # Dark green (WCAG AAA)
-        "accent": "#34d399",         # Light green accent
-        "card_bg": "#ffffff",
-        "emoji": "🌿",
-    },
-    "peach": {
-        "name": "Peach Sunset",
-        "primary": "#f97316",        # Orange
-        "secondary": "#fed7aa",      # Light orange
-        "background": "#fff7ed",     # Lightest orange
-        "text": "#7c2d12",           # Dark orange (WCAG AAA)
-        "accent": "#fb923c",         # Orange accent
-        "card_bg": "#ffffff",
-        "emoji": "🍑",
+    "dark": {
+        "name": "Dark Mode",
+        "background": "#0F172A",
+        "card_bg": "#1E293B",
+        "primary": "#2563EB",
+        "secondary": "#4F46E5",
+        "accent": "#22C55E",
+        "text": "#E2E8F0",
+        "emoji": "🌙",
     },
     "ocean": {
         "name": "Deep Ocean",
@@ -65,7 +35,44 @@ THEMES: Dict[str, Dict[str, str]] = {
         "card_bg": "#ffffff",
         "emoji": "🌊",
     },
+    "sunset": {
+        "name": "Peach Sunset",
+        "primary": "#f97316",        # Orange
+        "secondary": "#fed7aa",      # Light orange
+        "background": "#fff7ed",     # Lightest orange
+        "text": "#7c2d12",           # Dark orange (WCAG AAA)
+        "accent": "#fb923c",         # Orange accent
+        "card_bg": "#ffffff",
+        "emoji": "🍑",
+    },
 }
+
+
+def get_current_theme() -> dict:
+    """Get the currently active theme from session_state or default."""
+    return THEMES.get(st.session_state.get("current_theme", "pastel"))
+
+
+def render_theme_selector():
+    """Render a simple button to cycle through themes."""
+    themes = list(THEMES.keys())
+    current = st.session_state.get("current_theme", "pastel")
+    idx = themes.index(current)
+    next_idx = (idx + 1) % len(themes)
+    
+    if st.button(f"🎨 تغيير الثيم إلى {THEMES[themes[next_idx]]['name']}", key="change_theme"):
+        st.session_state.current_theme = themes[next_idx]
+        st.success(f"تم تغيير الثيم إلى {themes[next_idx]}")
+        st.rerun()
+    
+    st.markdown(f"<small>الثيم الحالي: <b>{current}</b></small>", unsafe_allow_html=True)
+
+
+def apply_active_theme() -> None:
+    """Inject CSS for the currently active theme."""
+    theme = get_current_theme()
+    _inject_theme_css(theme)
+
 
 
 def _inject_theme_css(theme: Dict[str, str]) -> None:
