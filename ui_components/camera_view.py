@@ -408,10 +408,6 @@ def render_camera_view() -> None:
         _render_upload_fallback()
         return
 
-    if not WEBRTC_AVAILABLE:
-        _render_upload_fallback()
-        return
-
     # Get messages based on language
     messages = _get_ui_messages(st.session_state.language)
     
@@ -484,10 +480,6 @@ def render_camera_view() -> None:
     <div class="scan-helper">
         📸 {messages.get('camera_guide', 'وجّه الكاميرا نحو المنتج للمسح التلقائي')}
     </div>
-    """
-        <div class="quick-action" onclick="alert('{messages['guide_tip']}')">{messages['guides']}</div>
-    </div>
-    <div class="scan-helper">{messages['helper_text']}</div>
     </div>
     """
 
