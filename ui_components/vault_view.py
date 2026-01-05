@@ -9,6 +9,11 @@ def render_vault() -> None:
     """Render medical vault with modern grid design"""
     theme = get_current_theme()
     
+    # Back to home button
+    if st.button("🔙 رجوع إلى الرئيسية", key="vault_back_home"):
+        st.session_state.active_page = "home"
+        st.rerun()
+    
     # Inject vault-specific CSS
     _inject_vault_css(theme)
     
@@ -221,6 +226,15 @@ def _render_category_grid(theme: dict) -> None:
     """Render medical document categories in grid layout"""
     st.markdown("### 📂 فئات الملفات الطبية")
     
+    # Calculate counts first
+    total = len(st.session_state.medical_history)
+    count_tests = sum(1 for doc in st.session_state.medical_history if "test" in doc.get("name", "").lower() or "lab" in doc.get("name", "").lower())
+    count_reports = sum(1 for doc in st.session_state.medical_history if "report" in doc.get("name", "").lower())
+    count_prescriptions = sum(1 for doc in st.session_state.medical_history if "prescription" in doc.get("name", "").lower() or "med" in doc.get("name", "").lower())
+    count_vaccines = sum(1 for doc in st.session_state.medical_history if "vaccine" in doc.get("name", "").lower() or "vac" in doc.get("name", "").lower())
+    count_xrays = sum(1 for doc in st.session_state.medical_history if "xray" in doc.get("name", "").lower() or "scan" in doc.get("name", "").lower())
+    count_other = total - (count_tests + count_reports + count_prescriptions + count_vaccines + count_xrays)
+    
     # Define categories with icons and colors
     categories = [
         {
@@ -230,7 +244,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "🧪",
             "color": "#3b82f6",
             "color_light": "#60a5fa",
-            "count": sum(1 for doc in st.session_state.medical_history if "test" in doc.get("name", "").lower() or "lab" in doc.get("name", "").lower())
+            "count": count_tests
         },
         {
             "id": "reports",
@@ -239,7 +253,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "📋",
             "color": "#8b5cf6",
             "color_light": "#a78bfa",
-            "count": sum(1 for doc in st.session_state.medical_history if "report" in doc.get("name", "").lower())
+            "count": count_reports
         },
         {
             "id": "prescriptions",
@@ -248,7 +262,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "💊",
             "color": "#ec4899",
             "color_light": "#f472b6",
-            "count": sum(1 for doc in st.session_state.medical_history if "prescription" in doc.get("name", "").lower() or "med" in doc.get("name", "").lower())
+            "count": count_prescriptions
         },
         {
             "id": "vaccines",
@@ -257,7 +271,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "💉",
             "color": "#10b981",
             "color_light": "#34d399",
-            "count": sum(1 for doc in st.session_state.medical_history if "vaccine" in doc.get("name", "").lower() or "vac" in doc.get("name", "").lower())
+            "count": count_vaccines
         },
         {
             "id": "xrays",
@@ -266,7 +280,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "🏥",
             "color": "#f59e0b",
             "color_light": "#fbbf24",
-            "count": sum(1 for doc in st.session_state.medical_history if "xray" in doc.get("name", "").lower() or "scan" in doc.get("name", "").lower())
+            "count": count_xrays
         },
         {
             "id": "other",
@@ -275,7 +289,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "📄",
             "color": "#64748b",
             "color_light": "#94a3b8",
-            "count": len(st.session_state.medical_history) - sum(cat["count"] for cat in [categories[i] for i in range(5)])
+            "count": count_other
         },
     ]
     

@@ -157,30 +157,18 @@ def render_bottom_navigation():
             ("settings", "⚙️", "الإعدادات"),
         ]
         
-        # Create navigation HTML
-        nav_html = '<div class="nav-items-container">'
-        for page, icon, label in nav_items:
-            is_active = page == active_page
-            active_class = "active" if is_active else ""
-            nav_html += f'''
-                <div class="nav-item {active_class}" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', key: 'nav_{page}', value: true}}, '*')">
-                    <div class="nav-indicator"></div>
-                    <div class="nav-icon">{icon}</div>
-                    <div class="nav-label">{label}</div>
-                </div>
-            '''
-        nav_html += '</div>'
-        st.markdown(nav_html, unsafe_allow_html=True)
-        
-        # Use columns for click detection (fallback method)
+        # Create navigation using streamlit buttons
         cols = st.columns(4)
         for col, (page, icon, label) in zip(cols, nav_items):
             with col:
-                # Hidden button for click detection
+                is_active = page == active_page
+                button_type = "primary" if is_active else "secondary"
+                
                 if st.button(
-                    label,
+                    f"{icon}\n{label}",
                     key=f"nav_{page}",
                     use_container_width=True,
+                    type=button_type,
                     help=f"انتقل إلى {label}"
                 ):
                     st.session_state.active_page = page

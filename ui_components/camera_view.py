@@ -392,6 +392,11 @@ class LiveVisionProcessor(VideoProcessorBase):
 
 def render_camera_view() -> None:
     """Render live camera view with AR overlays and continuous scanning."""
+    # Back to home button
+    if st.button("🔙 رجوع إلى الرئيسية", key="camera_back_home"):
+        st.session_state.active_page = "home"
+        st.rerun()
+    
     _inject_camera_css()
     
     # Initialize session state

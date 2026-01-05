@@ -60,8 +60,9 @@ def render_auth_screen() -> None:
         state = query_params["state"]
         
         if handle_oauth_callback(provider, code, state):
-            # Clear query params
+            # Clear query params and redirect to dashboard
             st.query_params.clear()
+            st.session_state.active_page = "home"
             st.success("✅ تم تسجيل الدخول بنجاح!")
             st.rerun()
         else:
@@ -75,6 +76,11 @@ def render_auth_screen() -> None:
 # ============== Settings Page ==============
 
 def render_settings_page() -> None:
+    # Back to home button
+    if st.button("🔙 رجوع إلى الرئيسية", key="settings_back_home"):
+        st.session_state.active_page = "home"
+        st.rerun()
+    
     st.markdown("## ⚙️ Settings & Theme")
     render_theme_wheel()
     st.divider()
