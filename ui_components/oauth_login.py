@@ -46,19 +46,19 @@ def _inject_oauth_css() -> None:
             margin-bottom: 40px;
         }}
         
-        .oauth-logo {
+        .oauth-logo {{
             font-size: 72px;
             margin-bottom: 16px;
             animation: float 3s ease-in-out infinite;
-        }
+        }}
 
-        .oauth-logo-img {
+        .oauth-logo-img {{
             width: 140px;
             height: auto;
             margin: 0 auto 16px auto;
             display: block;
             filter: drop-shadow(0 6px 16px rgba(0,0,0,0.25));
-        }
+        }}
         
         .oauth-title {{
             font-size: 32px;
