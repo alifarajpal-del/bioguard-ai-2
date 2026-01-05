@@ -15,12 +15,13 @@ st.set_page_config(
 
 # Imports
 from config.settings import MOBILE_VIEWPORT
-from ui_components.theme_wheel import apply_active_theme, render_theme_wheel
+from ui_components.theme_wheel import render_theme_wheel
 from ui_components.navigation import render_bottom_navigation, get_active_page
 from ui_components.dashboard_view import render_dashboard
 from ui_components.camera_view import render_camera_view
 from ui_components.vault_view import render_vault
 from ui_components.oauth_login import render_oauth_login, handle_oauth_callback
+from ui_components.global_styles import inject_global_css
 from services.auth import create_or_login_user, logout
 
 
@@ -34,10 +35,10 @@ def init_session_state() -> None:
         st.session_state.authenticated = False
     if "user_profile" not in st.session_state:
         st.session_state.user_profile = None
-    if "active_page" not in st.session_state:
-        st.session_state.active_page = "home"
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "home"
     if "active_theme" not in st.session_state:
-        st.session_state.active_theme = "ocean"
+        st.session_state.active_theme = "pastel"
     if "analysis_history" not in st.session_state:
         st.session_state.analysis_history = []
     if "ai_provider" not in st.session_state:
@@ -62,7 +63,7 @@ def render_auth_screen() -> None:
         if handle_oauth_callback(provider, code, state):
             # Clear query params and redirect to dashboard
             st.query_params.clear()
-            st.session_state.active_page = "home"
+            st.session_state.current_page = "home"
             st.success("✅ تم تسجيل الدخول بنجاح!")
             st.rerun()
         else:
@@ -78,7 +79,7 @@ def render_auth_screen() -> None:
 def render_settings_page() -> None:
     # Back to home button
     if st.button("🔙 رجوع إلى الرئيسية", key="settings_back_home"):
-        st.session_state.active_page = "home"
+        st.session_state.current_page = "home"
         st.rerun()
     
     st.markdown("## ⚙️ Settings & Theme")
@@ -125,7 +126,7 @@ def render_settings_page() -> None:
 def main() -> None:
     init_session_state()
     st.markdown(MOBILE_VIEWPORT, unsafe_allow_html=True)
-    apply_active_theme()
+    inject_global_css()
 
     if not st.session_state.authenticated:
         render_auth_screen()

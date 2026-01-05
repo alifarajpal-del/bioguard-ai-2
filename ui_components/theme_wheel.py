@@ -48,20 +48,21 @@ THEMES: Dict[str, Dict[str, str]] = {
 }
 
 
-def get_current_theme() -> dict:
-    """Get the currently active theme from session_state or default."""
-    return THEMES.get(st.session_state.get("current_theme", "pastel"))
+def get_current_theme() -> Dict[str, Any]:
+    """Return the active theme with a safe fallback."""
+    key = st.session_state.get("active_theme", "pastel")
+    return THEMES.get(key, THEMES["pastel"])
 
 
 def render_theme_selector():
     """Render a simple button to cycle through themes."""
     themes = list(THEMES.keys())
-    current = st.session_state.get("current_theme", "pastel")
+    current = st.session_state.get("active_theme", "pastel")
     idx = themes.index(current)
     next_idx = (idx + 1) % len(themes)
     
     if st.button(f"🎨 تغيير الثيم إلى {THEMES[themes[next_idx]]['name']}", key="change_theme"):
-        st.session_state.current_theme = themes[next_idx]
+        st.session_state.active_theme = themes[next_idx]
         st.success(f"تم تغيير الثيم إلى {themes[next_idx]}")
         st.rerun()
     
@@ -80,11 +81,19 @@ def _inject_theme_css(theme: Dict[str, str]) -> None:
     css = f"""
     <style>
         :root {{
+            /* legacy variable names */
             --primary-color: {theme['primary']};
             --background-color: {theme['background']};
             --text-color: {theme['text']};
             --secondary-background-color: {theme['secondary']};
             --accent-color: {theme['accent']};
+            --card-bg: {theme['card_bg']};
+            /* unified variable names used by components */
+            --primary: {theme['primary']};
+            --secondary: {theme['secondary']};
+            --accent: {theme['accent']};
+            --text: {theme['text']};
+            --bg: {theme['background']};
             --card-bg: {theme['card_bg']};
         }}
         
@@ -472,7 +481,7 @@ def render_theme_wheel() -> None:
         if st.button("🎲 تدوير العجلة!", use_container_width=True, type="primary", key="spin_wheel"):
             # Select random theme
             theme_keys = list(THEMES.keys())
-            current = st.session_state.get("active_theme", "lavender")
+            current = st.session_state.get("active_theme", "pastel")
             available = [t for t in theme_keys if t != current]
             new_theme = random.choice(available) if available else current
             
@@ -521,14 +530,3 @@ def render_theme_wheel() -> None:
         """,
         unsafe_allow_html=True,
     )
-
-
-def apply_active_theme() -> None:
-    theme = get_current_theme()
-    _inject_theme_css(theme)
-
-
-def get_current_theme() -> Dict[str, Any]:
-    """Get the currently active theme"""
-    key = st.session_state.get("active_theme", "lavender")
-    return THEMES.get(key, THEMES["lavender"])

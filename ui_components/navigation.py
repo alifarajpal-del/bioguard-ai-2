@@ -7,7 +7,7 @@ from ui_components.theme_wheel import get_current_theme
 def render_bottom_navigation():
     """Render modern bottom navigation with circular buttons and labels"""
     theme = get_current_theme()
-    active_page = st.session_state.get("active_page", "home")
+    active_page = st.session_state.get("current_page", "home")
 
     # Modern Bottom Navigation CSS with theme colors
     css = f"""
@@ -171,7 +171,7 @@ def render_bottom_navigation():
                     type=button_type,
                     help=f"انتقل إلى {label}"
                 ):
-                    st.session_state.active_page = page
+                    st.session_state.current_page = page
                     st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -179,4 +179,4 @@ def render_bottom_navigation():
 
 def get_active_page() -> str:
     """Get the currently active page"""
-    return st.session_state.get("active_page", "home")
+    return st.session_state.get("current_page", "home")
