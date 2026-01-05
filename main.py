@@ -18,11 +18,20 @@ from config.settings import MOBILE_VIEWPORT
 from ui_components.theme_wheel import render_theme_wheel
 from ui_components.navigation import render_bottom_navigation, get_active_page
 from ui_components.dashboard_view import render_dashboard
-from ui_components.camera_view import render_camera_view
 from ui_components.vault_view import render_vault
 from ui_components.oauth_login import render_oauth_login, handle_oauth_callback
 from ui_components.global_styles import inject_global_css
 from services.auth import create_or_login_user, logout
+
+# Camera view - choose version
+try:
+    from ui_components.camera_view_refactored import render_camera_view as render_camera_new
+    REFACTORED_CAMERA_AVAILABLE = True
+except ImportError:
+    REFACTORED_CAMERA_AVAILABLE = False
+    render_camera_new = None
+
+from ui_components.camera_view import render_camera_view as render_camera_legacy
 
 
 # ============== Session State Initialization ==============
@@ -43,6 +52,8 @@ def init_session_state() -> None:
         st.session_state.analysis_history = []
     if "ai_provider" not in st.session_state:
         st.session_state.ai_provider = "gemini"
+    if "use_refactored_camera" not in st.session_state:
+        st.session_state.use_refactored_camera = REFACTORED_CAMERA_AVAILABLE
 
 
 # ============== Authentication UI ==============
@@ -99,6 +110,17 @@ def render_settings_page() -> None:
     )
     st.caption("سيتم استخدام المحرك المفضل ثم يتم التحويل تلقائياً للمحرك الآخر أو الوضع الوهمي إذا فشل.")
     st.divider()
+    
+    # Camera view selector
+    if REFACTORED_CAMERA_AVAILABLE:
+        st.markdown("### 📸 Camera Version")
+        use_new = st.checkbox(
+            "Use Refactored Camera (Recommended)",
+            value=st.session_state.use_refactored_camera,
+            help="New modular camera with better performance and cleaner UI"
+        )
+        st.session_state.use_refactored_camera = use_new
+        st.divider()
 
     st.markdown("### 👤 Profile")
     user = st.session_state.user_profile or {}
@@ -136,7 +158,11 @@ def main() -> None:
     if page == "home":
         render_dashboard()
     elif page == "scan":
-        render_camera_view()
+        # Choose camera version based on settings
+        if st.session_state.use_refactored_camera and REFACTORED_CAMERA_AVAILABLE:
+            render_camera_new()
+        else:
+            render_camera_legacy()
     elif page == "vault":
         render_vault()
     elif page == "settings":
