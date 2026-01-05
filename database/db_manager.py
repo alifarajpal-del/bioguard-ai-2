@@ -73,6 +73,9 @@ class DBManager:
                 allergies TEXT,
                 medical_conditions TEXT,
                 dietary_preferences TEXT,
+                health_sync_enabled BOOLEAN DEFAULT 0,
+                region TEXT,
+                preferred_sources TEXT,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP
             )
@@ -88,10 +91,21 @@ class DBManager:
                 nova_score INTEGER,
                 verdict TEXT,
                 raw_data TEXT,
+                data_source TEXT,
+                nutrients TEXT,
+                barcode TEXT,
                 created_at TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+
+        # Backfill new columns for existing installs
+        self._add_column_if_missing(cursor, "users", "health_sync_enabled", "BOOLEAN DEFAULT 0")
+        self._add_column_if_missing(cursor, "users", "region", "TEXT")
+        self._add_column_if_missing(cursor, "users", "preferred_sources", "TEXT")
+        self._add_column_if_missing(cursor, "food_analysis", "data_source", "TEXT")
+        self._add_column_if_missing(cursor, "food_analysis", "nutrients", "TEXT")
+        self._add_column_if_missing(cursor, "food_analysis", "barcode", "TEXT")
         
         # Medical Files
         cursor.execute("""
@@ -119,6 +133,13 @@ class DBManager:
         
         conn.commit()
         conn.close()
+
+    def _add_column_if_missing(self, cursor: sqlite3.Cursor, table: str, column: str, definition: str) -> None:
+        """Add a column to a table if it does not already exist."""
+        cursor.execute(f"PRAGMA table_info({table})")
+        existing = {row[1] for row in cursor.fetchall()}
+        if column not in existing:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     
     def _init_graph(self):
         """Initialize knowledge graph for ingredient-health relationships."""
@@ -177,8 +198,9 @@ class DBManager:
                 INSERT OR REPLACE INTO users 
                 (user_id, name, email, picture, provider, email_verified,
                  age, weight, height, allergies, medical_conditions, 
-                 dietary_preferences, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 dietary_preferences, health_sync_enabled, region, preferred_sources,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_data['user_id'],
                 user_data.get('name'),
@@ -192,6 +214,9 @@ class DBManager:
                 json.dumps(user_data.get('allergies', [])),
                 json.dumps(user_data.get('medical_conditions', [])),
                 json.dumps(user_data.get('dietary_preferences', [])),
+                bool(user_data.get('health_sync_enabled', False)),
+                user_data.get('region'),
+                json.dumps(user_data.get('preferred_sources', [])),
                 datetime.utcnow().isoformat(),
                 datetime.utcnow().isoformat(),
             ))
@@ -235,11 +260,60 @@ class DBManager:
                     'allergies': json.loads(row[9] or '[]'),
                     'medical_conditions': json.loads(row[10] or '[]'),
                     'dietary_preferences': json.loads(row[11] or '[]'),
+                    'health_sync_enabled': bool(row[12]) if len(row) > 12 else False,
+                    'region': row[13] if len(row) > 13 else None,
+                    'preferred_sources': json.loads(row[14] or '[]') if len(row) > 14 else [],
                 }
             return None
         except Exception as e:
             print(f"❌ Error retrieving user: {e}")
             return None
+
+    def update_user_settings(
+        self,
+        user_id: str,
+        health_sync_enabled: Optional[bool] = None,
+        region: Optional[str] = None,
+        preferred_sources: Optional[List[str]] = None,
+    ) -> bool:
+        """Update user nutrition/health-sync settings."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            updates = []
+            params: List[Any] = []
+
+            if health_sync_enabled is not None:
+                updates.append("health_sync_enabled = ?")
+                params.append(bool(health_sync_enabled))
+
+            if region is not None:
+                updates.append("region = ?")
+                params.append(region)
+
+            if preferred_sources is not None:
+                updates.append("preferred_sources = ?")
+                params.append(json.dumps(preferred_sources))
+
+            if not updates:
+                return True
+
+            updates.append("updated_at = ?")
+            params.append(datetime.utcnow().isoformat())
+            params.append(user_id)
+
+            cursor.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?",
+                params,
+            )
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"❌ Error updating user settings: {e}")
+            return False
     
     def save_food_analysis(self, user_id: str, analysis_data: Dict[str, Any]) -> bool:
         """
@@ -268,8 +342,8 @@ class DBManager:
             
             cursor.execute("""
                 INSERT INTO food_analysis 
-                (user_id, product, health_score, nova_score, verdict, raw_data, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, product, health_score, nova_score, verdict, raw_data, data_source, nutrients, barcode, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id,
                 analysis_data.get('product', 'Unknown'),  # Changed from 'name' to 'product'
@@ -277,6 +351,9 @@ class DBManager:
                 int(nova_score),    # Ensure INTEGER type
                 analysis_data.get('verdict', 'UNKNOWN'),
                 json.dumps(analysis_data),
+                analysis_data.get('data_source') or analysis_data.get('source'),
+                json.dumps(analysis_data.get('nutrients', {})),
+                analysis_data.get('barcode'),
                 datetime.utcnow().isoformat(),
             ))
             

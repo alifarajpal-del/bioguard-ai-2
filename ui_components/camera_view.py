@@ -1,6 +1,6 @@
 """Full-screen AR camera view with WebRTC fix and AI analysis."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from io import BytesIO
 import time
 import asyncio
@@ -23,7 +23,16 @@ from services.live_vision import get_live_vision_service
 from services.barcode_scanner import get_barcode_scanner
 from services.recommendations import get_recommendations_service
 from database.db_manager import get_db_manager
-from config.settings import DETECTION_FPS, SUPPORTED_LANGUAGES
+from services.health_sync import get_health_sync_service
+from config.settings import (
+    DETECTION_FPS,
+    SUPPORTED_LANGUAGES,
+    DEFAULT_REGION,
+    DEFAULT_PREFERRED_SOURCES,
+    REGIONAL_SOURCE_DEFAULTS,
+    HEALTH_SYNC_DEFAULT,
+)
+from services.nutrition_api import NutritionAPI
 
 
 def _inject_camera_css() -> None:
@@ -346,6 +355,21 @@ def _inject_camera_css() -> None:
     st.markdown(css, unsafe_allow_html=True)
 
 
+def _get_nutrition_client() -> NutritionAPI:
+    """Singleton nutrition client stored in session state."""
+    if 'nutrition_client' not in st.session_state:
+        st.session_state.nutrition_client = NutritionAPI()
+    return st.session_state.nutrition_client
+
+
+def _get_preferred_sources(region: Optional[str] = None) -> List[str]:
+    """Resolve preferred nutrition sources with regional defaults."""
+    if st.session_state.get('preferred_sources'):
+        return st.session_state.preferred_sources
+    region_key = (region or st.session_state.get('region') or DEFAULT_REGION).lower()
+    return REGIONAL_SOURCE_DEFAULTS.get(region_key, DEFAULT_PREFERRED_SOURCES)
+
+
 class LiveVisionProcessor(VideoProcessorBase):
     """Process video frames with LiveVision service."""
     
@@ -408,6 +432,14 @@ def render_camera_view() -> None:
         st.session_state.analysis_history = []
     if 'language' not in st.session_state:
         st.session_state.language = 'en'
+    if 'preferred_sources' not in st.session_state:
+        st.session_state.preferred_sources = _get_preferred_sources()
+    if 'region' not in st.session_state:
+        st.session_state.region = DEFAULT_REGION
+    if 'health_sync_enabled' not in st.session_state:
+        st.session_state.health_sync_enabled = HEALTH_SYNC_DEFAULT
+    if 'last_nutrition_snapshot' not in st.session_state:
+        st.session_state.last_nutrition_snapshot = None
 
     if not WEBRTC_AVAILABLE:
         _render_upload_fallback()
@@ -423,6 +455,42 @@ def render_camera_view() -> None:
         'analyzing': messages['analyzing'],
         'complete': messages['complete']
     }.get(st.session_state.scan_status, messages['searching'])
+
+    region_options = list(REGIONAL_SOURCE_DEFAULTS.keys())
+    region_index = region_options.index(st.session_state.region) if st.session_state.region in region_options else region_options.index(DEFAULT_REGION)
+
+    with st.expander("Nutrition sources & sync", expanded=False):
+        selected_region = st.selectbox("Region defaults", region_options, index=region_index)
+        preferred_sources = st.multiselect(
+            "Preferred sources (first wins)",
+            DEFAULT_PREFERRED_SOURCES,
+            default=_get_preferred_sources(selected_region),
+            help="Order determines lookup priority",
+        )
+        sync_enabled = st.checkbox(
+            "Sync with Health apps",
+            value=st.session_state.health_sync_enabled,
+            help="Enable HealthKit / Health Connect sync for nutrition entries",
+        )
+
+        if (
+            selected_region != st.session_state.region
+            or preferred_sources != st.session_state.preferred_sources
+            or sync_enabled != st.session_state.health_sync_enabled
+        ):
+            st.session_state.region = selected_region
+            st.session_state.preferred_sources = preferred_sources or _get_preferred_sources(selected_region)
+            st.session_state.health_sync_enabled = sync_enabled
+
+            user_id = st.session_state.get('user_id')
+            if user_id:
+                db = get_db_manager()
+                db.update_user_settings(
+                    user_id,
+                    health_sync_enabled=sync_enabled,
+                    region=selected_region,
+                    preferred_sources=st.session_state.preferred_sources,
+                )
 
     rtc_config = RTCConfiguration({
         "iceServers": [
@@ -531,10 +599,41 @@ def render_camera_view() -> None:
                             f"⚠️ {c['ingredient']} may affect {c['health_condition']}" 
                             for c in conflicts[:3]
                         ]
+
+                if not st.session_state.last_nutrition_snapshot and result.get('product'):
+                    nutrition_client = _get_nutrition_client()
+                    snapshot = nutrition_client.get_nutrition(
+                        query=result.get('product'),
+                        preferred_sources=_get_preferred_sources(st.session_state.region),
+                    )
+                    if snapshot.get('source'):
+                        st.session_state.last_nutrition_snapshot = snapshot
+
+                if st.session_state.last_barcode and isinstance(st.session_state.last_barcode, dict):
+                    result['barcode'] = st.session_state.last_barcode.get('barcode')
+
+                if st.session_state.last_nutrition_snapshot:
+                    snapshot = st.session_state.last_nutrition_snapshot
+                    result['data_source'] = snapshot.get('source')
+                    result['nutrients'] = snapshot.get('raw') or snapshot
+                    if not result.get('product') and isinstance(snapshot.get('raw'), dict):
+                        label = snapshot['raw'].get('product_name')
+                        if label:
+                            result['product'] = label
                 
                 # Save to history
                 st.session_state.analysis_history.append(result)
                 db.save_food_analysis(user_id, result)
+
+                if st.session_state.health_sync_enabled and result.get('nutrients'):
+                    health_sync = get_health_sync_service()
+                    health_sync.sync_nutrition_entry(
+                        user_id=user_id,
+                        product=result.get('product', 'Unknown'),
+                        nutrients=result.get('nutrients', {}),
+                        source=result.get('data_source'),
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
                 
                 st.session_state.scan_status = 'complete'
                 
@@ -563,6 +662,19 @@ def render_camera_view() -> None:
                     if result.get('ingredients'):
                         with st.expander(messages['ingredients']):
                             st.write(", ".join(result.get('ingredients', [])))
+
+                    nutrients = result.get('nutrients') or {}
+                    if nutrients:
+                        with st.expander(messages.get('nutrition_details', 'Nutrition breakdown')):
+                            st.write({
+                                'calories': nutrients.get('calories'),
+                                'carbs': nutrients.get('carbohydrates') or nutrients.get('carbs'),
+                                'fat': nutrients.get('fat'),
+                                'protein': nutrients.get('protein'),
+                                'sugar': nutrients.get('sugars') or nutrients.get('sugar'),
+                            })
+                            if result.get('data_source'):
+                                st.caption(f"Source: {result['data_source']}")
                 
                 with col2:
                     st.image(image, use_container_width=True, caption=messages['scanned_image'])
@@ -651,6 +763,7 @@ def render_camera_view() -> None:
             # Reset status after delay
             time.sleep(2)
             st.session_state.scan_status = 'searching'
+            st.session_state.last_nutrition_snapshot = None
             st.rerun()
         
         # Manual capture button
@@ -673,6 +786,15 @@ def render_camera_view() -> None:
             if barcode_data and barcode_data != st.session_state.last_barcode:
                 st.session_state.last_barcode = barcode_data
                 product_info = barcode_data.get('product_info')
+
+                nutrition_client = _get_nutrition_client()
+                nutrition_snapshot = nutrition_client.get_nutrition(
+                    barcode=barcode_data.get('barcode'),
+                    query=product_info.get('name') if product_info else None,
+                    preferred_sources=_get_preferred_sources(st.session_state.region),
+                )
+                if nutrition_snapshot.get('source'):
+                    st.session_state.last_nutrition_snapshot = nutrition_snapshot
                 
                 if product_info:
                     with st.expander(f"📊 {messages['barcode_detected']}: {barcode_data['barcode']}", expanded=True):
@@ -682,6 +804,18 @@ def render_camera_view() -> None:
                         
                         if product_info.get('image_url'):
                             st.image(product_info['image_url'], width=200)
+
+                        if nutrition_snapshot.get('source'):
+                            st.info(
+                                {
+                                    'calories': nutrition_snapshot['raw'].get('calories') if nutrition_snapshot.get('raw') else None,
+                                    'carbs': nutrition_snapshot['raw'].get('carbohydrates') if nutrition_snapshot.get('raw') else None,
+                                    'fat': nutrition_snapshot['raw'].get('fat') if nutrition_snapshot.get('raw') else None,
+                                    'protein': nutrition_snapshot['raw'].get('protein') if nutrition_snapshot.get('raw') else None,
+                                    'sugar': nutrition_snapshot['raw'].get('sugars') if nutrition_snapshot.get('raw') else None,
+                                    'source': nutrition_snapshot.get('source'),
+                                }
+                            )
                 
         # Show analysis history
         if st.session_state.analysis_history:
@@ -739,6 +873,7 @@ def _get_ui_messages(language: str = 'en') -> Dict[str, str]:
             'allow_camera': 'اسمح للمتصفح بالوصول إلى الكاميرا ليبدأ المسح تلقائيًا',
             'how_to_scan': 'كيفية المسح',
             'scan_instructions': '1) اسمح بالوصول للكاميرا  •  2) وجّه نحو المنتج  •  3) انتظر التحليل التلقائي أو اضغط زر الالتقاط',
+            'nutrition_details': 'الحقائق الغذائية',
         },
         'en': {
             'live': 'LIVE',
@@ -770,6 +905,7 @@ def _get_ui_messages(language: str = 'en') -> Dict[str, str]:
             'allow_camera': 'Allow browser to access camera to start scanning',
             'how_to_scan': 'How to Scan',
             'scan_instructions': '1) Allow camera access  •  2) Point at product  •  3) Wait for auto-analysis or tap capture',
+            'nutrition_details': 'Nutrition facts',
         },
         'fr': {
             'live': 'EN DIRECT',
@@ -799,6 +935,7 @@ def _get_ui_messages(language: str = 'en') -> Dict[str, str]:
             'allow_camera': 'Autorisez le navigateur à accéder à la caméra pour commencer',
             'how_to_scan': 'Comment Scanner',
             'scan_instructions': '1) Autorisez l\'accès caméra  •  2) Pointez vers le produit  •  3) Attendez l\'analyse auto ou appuyez',
+            'nutrition_details': 'Infos nutritionnelles',
         }
     }
     
@@ -844,6 +981,17 @@ def _render_upload_fallback() -> None:
                         st.success(f"📊 {messages.get('barcode_detected', 'Barcode')}: {barcode_data['barcode']}")
                         if barcode_data.get('product_info'):
                             result['barcode_info'] = barcode_data['product_info']
+
+                        nutrition_client = _get_nutrition_client()
+                        nutrition_snapshot = nutrition_client.get_nutrition(
+                            barcode=barcode_data.get('barcode'),
+                            query=barcode_data.get('product_info', {}).get('name') if barcode_data.get('product_info') else None,
+                            preferred_sources=_get_preferred_sources(st.session_state.region),
+                        )
+                        if nutrition_snapshot.get('source'):
+                            st.session_state.last_nutrition_snapshot = nutrition_snapshot
+                            result['data_source'] = nutrition_snapshot.get('source')
+                            result['nutrients'] = nutrition_snapshot.get('raw') or nutrition_snapshot
                     
                     # Try OCR
                     ocr_text = barcode_scanner.extract_text_ocr(img_array)
@@ -859,9 +1007,29 @@ def _render_upload_fallback() -> None:
                         ingredients = barcode_scanner.extract_ingredients_list(ocr_text)
                         if ingredients:
                             result['ocr_ingredients'] = ingredients
+
+                    if not st.session_state.last_nutrition_snapshot and result.get('product'):
+                        nutrition_client = _get_nutrition_client()
+                        snapshot = nutrition_client.get_nutrition(
+                            query=result.get('product'),
+                            preferred_sources=_get_preferred_sources(st.session_state.region),
+                        )
+                        if snapshot.get('source'):
+                            st.session_state.last_nutrition_snapshot = snapshot
+                            result['data_source'] = snapshot.get('source')
+                            result['nutrients'] = snapshot.get('raw') or snapshot
                     
                     # Save to history
                     st.session_state.analysis_history.append(result)
+
+                    if st.session_state.health_sync_enabled and result.get('nutrients'):
+                        health_sync = get_health_sync_service()
+                        health_sync.sync_nutrition_entry(
+                            user_id=st.session_state.get('user_id', 'anonymous'),
+                            product=result.get('product', 'Unknown'),
+                            nutrients=result.get('nutrients', {}),
+                            source=result.get('data_source'),
+                        )
                     
                     # Display results
                     st.success(f"✅ {messages.get('analysis_complete', 'Complete')}")

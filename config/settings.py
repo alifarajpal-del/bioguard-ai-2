@@ -14,6 +14,28 @@ DEBUG = ENVIRONMENT == "development"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Nutrition APIs
+USDA_API_KEY = os.getenv("USDA_API_KEY", "")
+EDAMAM_APP_ID = os.getenv("EDAMAM_APP_ID", "")
+EDAMAM_APP_KEY = os.getenv("EDAMAM_APP_KEY", "")
+NUTRITIONIX_APP_ID = os.getenv("NUTRITIONIX_APP_ID", "")
+NUTRITIONIX_API_KEY = os.getenv("NUTRITIONIX_API_KEY", "")
+DEFAULT_REGION = os.getenv("DEFAULT_REGION", "global").lower()
+DEFAULT_PREFERRED_SOURCES = [
+    src.strip() for src in os.getenv(
+        "DEFAULT_PREFERRED_SOURCES",
+        "openfoodfacts,fooddata,edamam,nutritionix",
+    ).split(",") if src.strip()
+]
+REGIONAL_SOURCE_DEFAULTS = {
+    "us": ["fooddata", "openfoodfacts", "nutritionix", "edamam"],
+    "eu": ["openfoodfacts", "edamam", "fooddata", "nutritionix"],
+    "mena": ["openfoodfacts", "edamam", "nutritionix", "fooddata"],
+    "apac": ["openfoodfacts", "edamam", "fooddata", "nutritionix"],
+    "global": ["openfoodfacts", "fooddata", "edamam", "nutritionix"],
+}
+HEALTH_SYNC_DEFAULT = os.getenv("HEALTH_SYNC_DEFAULT", "false").lower() == "true"
+
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "825700179698-j3c9s9ig1vnso20d3ma2bhns4si0in7b.apps.googleusercontent.com")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

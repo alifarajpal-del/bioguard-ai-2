@@ -3,14 +3,30 @@ OAuth Login UI Component.
 Beautiful login screen with Google and Apple Sign-In buttons.
 """
 
-import streamlit as st
-from typing import Optional
+import base64
+import os
 import secrets
+from typing import Optional
+
+import streamlit as st
 
 from services.oauth_providers import get_oauth_provider
 from services.auth import create_or_login_user
 from ui_components.theme_wheel import get_current_theme
 from database.db_manager import get_db_manager
+
+
+def _load_logo_data_uri() -> Optional[str]:
+    """Load branding logo and return data URI if file exists."""
+    logo_path = os.path.join("assets", "branding", "bioguard-shield.png")
+    if not os.path.exists(logo_path):
+        return None
+    try:
+        with open(logo_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        return None
 
 
 def _inject_oauth_css() -> None:
@@ -32,11 +48,19 @@ def _inject_oauth_css() -> None:
             margin-bottom: 40px;
         }}
         
-        .oauth-logo {{
+        .oauth-logo {
             font-size: 72px;
             margin-bottom: 16px;
             animation: float 3s ease-in-out infinite;
-        }}
+        }
+
+        .oauth-logo-img {
+            width: 140px;
+            height: auto;
+            margin: 0 auto 16px auto;
+            display: block;
+            filter: drop-shadow(0 6px 16px rgba(0,0,0,0.25));
+        }
         
         .oauth-title {{
             font-size: 32px;
@@ -222,6 +246,14 @@ def _inject_oauth_css() -> None:
 def render_oauth_login() -> None:
     """Render OAuth login screen with Google and Apple Sign-In."""
     _inject_oauth_css()
+
+    # Load logo asset if available
+    logo_data_uri = _load_logo_data_uri()
+    logo_html = (
+        f'<img src="{logo_data_uri}" alt="BioGuard AI Logo" class="oauth-logo-img" />'
+        if logo_data_uri
+        else '<div class="oauth-logo">🧬</div>'
+    )
     
     # Initialize session state
     if "oauth_state" not in st.session_state:
@@ -233,16 +265,19 @@ def render_oauth_login() -> None:
     st.markdown('<div class="oauth-login-container">', unsafe_allow_html=True)
     
     # Header
-    st.markdown('''
+    st.markdown(
+        f'''
         <div class="oauth-header">
-            <div class="oauth-logo">🧬</div>
+            {logo_html}
             <div class="oauth-title">BioGuard AI</div>
             <div class="oauth-subtitle">
                 Secure health & nutrition assistant<br>
                 Privacy-first · Real-time · Predictive
             </div>
         </div>
-    ''', unsafe_allow_html=True)
+    ''',
+        unsafe_allow_html=True,
+    )
     
     # Error message
     if st.session_state.oauth_error:

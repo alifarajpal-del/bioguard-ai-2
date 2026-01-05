@@ -3,12 +3,28 @@ BioGuard AI - Native Mobile Experience
 Modular UI with bottom navigation, theme wheel, and AR camera.
 """
 
+import os
+
 import streamlit as st
+from PIL import Image
 
 # Configure Streamlit early
+
+
+def _get_page_icon():
+    """Load app icon from branding assets if available."""
+    logo_path = os.path.join("assets", "branding", "bioguard-shield.png")
+    if os.path.exists(logo_path):
+        try:
+            return Image.open(logo_path)
+        except Exception:
+            return "🧬"
+    return "🧬"
+
+
 st.set_page_config(
     page_title="BioGuard AI",
-    page_icon="🧬",
+    page_icon=_get_page_icon(),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
