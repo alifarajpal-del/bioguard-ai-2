@@ -128,7 +128,7 @@ def render_bottom_navigation():
         }}
         
         /* Hide default Streamlit button styling in nav */
-        .nav-dock .stButton > button {
+        .nav-dock .stButton > button {{
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
@@ -137,18 +137,18 @@ def render_bottom_navigation():
             height: auto !important;
             color: transparent !important;
             font-size: 0 !important;
-        }
+        }}
         
-        .nav-dock .stButton > button:hover {
+        .nav-dock .stButton > button:hover {{
             background: transparent !important;
             border: none !important;
             transform: none !important;
-        }
+        }}
         
-        .nav-dock .stButton > button:focus {
+        .nav-dock .stButton > button:focus {{
             outline: none !important;
             box-shadow: none !important;
-        }
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
