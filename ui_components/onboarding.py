@@ -1,29 +1,37 @@
 """Simple onboarding flow shown once per user session."""
 
 import streamlit as st
+from utils.translations import get_text
 
-SCREENS = [
-    {
-        "title": "مرحباً بك في BioGuard AI",
-        "body": "مساعد صحي مدعّم بالذكاء الاصطناعي لتحليل التغذية والمنتجات في الوقت الفعلي.",
-        "icon": "🛡️",
-    },
-    {
-        "title": "الخصوصية أولاً",
-        "body": "يتم حفظ بياناتك على جهازك/حسابك مع مزامنة اختيارية لملفاتك الطبية.",
-        "icon": "🔒",
-    },
-    {
-        "title": "كيف يعمل المسح",
-        "body": "وجّه الكاميرا نحو المنتج، أو امسح الباركود، أو ارفع صورة لتحصل على تقييم صحي سريع.",
-        "icon": "📸",
-    },
-]
+
+def get_screens(lang: str) -> list:
+    """Get onboarding screens in the specified language."""
+    return [
+        {
+            "title": get_text("onboarding_title_1", lang),
+            "body": get_text("onboarding_body_1", lang),
+            "icon": "🛡️",
+        },
+        {
+            "title": get_text("onboarding_title_2", lang),
+            "body": get_text("onboarding_body_2", lang),
+            "icon": "🔒",
+        },
+        {
+            "title": get_text("onboarding_title_3", lang),
+            "body": get_text("onboarding_body_3", lang),
+            "icon": "📸",
+        },
+    ]
 
 
 def render_onboarding() -> None:
     if st.session_state.get("onboarding_done"):
         return
+    
+    # Get current language
+    lang = st.session_state.get("language", "en")
+    screens = get_screens(lang)
 
     # Center all onboarding content
     st.markdown("""
@@ -44,14 +52,14 @@ def render_onboarding() -> None:
     
     st.markdown('<div class="onboarding-container">', unsafe_allow_html=True)
     
-    st.markdown("## 🚀 لنبدأ")
-    for screen in SCREENS:
+    st.markdown(f"## 🚀 {get_text('lets_start', lang)}")
+    for screen in screens:
         with st.container():
             st.markdown(f"### {screen['icon']} {screen['title']}")
             st.markdown(screen["body"])
             st.divider()
 
-    if st.button("ابدأ الآن", type="primary", use_container_width=True):
+    if st.button(get_text("start_now", lang), type="primary", use_container_width=True):
         st.session_state.onboarding_done = True
         st.rerun()
     

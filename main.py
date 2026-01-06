@@ -79,6 +79,8 @@ def init_session_state() -> None:
         st.session_state.ai_provider = "gemini"
     if "use_refactored_camera" not in st.session_state:
         st.session_state.use_refactored_camera = REFACTORED_CAMERA_AVAILABLE
+    if "language" not in st.session_state:
+        st.session_state.language = "en"  # Default language is English
     ensure_nav_state()
     if "onboarding_done" not in st.session_state:
         st.session_state.onboarding_done = False
@@ -121,11 +123,31 @@ def render_settings_page() -> None:
 
 
 def _render_settings_inner() -> None:
+    from utils.translations import get_text
+    from config.settings import SUPPORTED_LANGUAGES
+    
+    lang = st.session_state.get("language", "en")
+    
     # Back button
-    if st.button("⬅️ رجوع", key="settings_back_home"):
+    if st.button(f"⬅️ {get_text('back', lang)}", key="settings_back_home"):
         go_back()
     
-    st.markdown("## ⚙️ Settings & Theme")
+    st.markdown(f"## ⚙️ {get_text('settings', lang)}")
+    
+    # Language selector
+    st.markdown(f"### 🌍 {get_text('language', lang)}")
+    selected_lang = st.selectbox(
+        get_text("select_language", lang),
+        options=list(SUPPORTED_LANGUAGES.keys()),
+        index=list(SUPPORTED_LANGUAGES.keys()).index(st.session_state.language),
+        format_func=lambda x: SUPPORTED_LANGUAGES[x],
+        key="language_selector"
+    )
+    if selected_lang != st.session_state.language:
+        st.session_state.language = selected_lang
+        st.rerun()
+    st.divider()
+    
     render_theme_wheel()
     st.divider()
 
@@ -140,7 +162,7 @@ def _render_settings_inner() -> None:
             "mock": "Mock (offline)",
         }.get(x, x),
     )
-    st.caption("سيتم استخدام المحرك المفضل ثم يتم التحويل تلقائياً للمحرك الآخر أو الوضع الوهمي إذا فشل.")
+    st.caption("Will use preferred engine, then fallback to others or mock mode if failed.")
     st.divider()
     
     # Camera view selector

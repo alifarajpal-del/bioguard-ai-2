@@ -3,6 +3,7 @@
 import streamlit as st
 from ui_components.theme_wheel import get_current_theme
 from ui_components.router import ensure_nav_state, go_to
+from utils.translations import get_text
 
 
 def render_bottom_navigation():
@@ -157,11 +158,14 @@ def render_bottom_navigation():
     # Bottom Navigation Bar with functional Streamlit buttons
     st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
     
+    # Get current language
+    lang = st.session_state.get("language", "en")
+    
     nav_items = [
-        ("dashboard", "🏠", "Dashboard"),
-        ("scan", "📸", "Scan"),
-        ("vault", "🗄️", "Vault"),
-        ("settings", "⚙️", "Settings"),
+        ("dashboard", "🏠", get_text("dashboard", lang)),
+        ("scan", "📸", get_text("scan", lang)),
+        ("vault", "🗄️", get_text("vault", lang)),
+        ("settings", "⚙️", get_text("settings", lang)),
     ]
     
     # Create navigation buttons with Streamlit native components
