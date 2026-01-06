@@ -371,6 +371,43 @@ def _inject_camera_css() -> None:
             from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
             to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
+        
+        /* Bottom Sheet for Results */
+        .result-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 55vh;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 150;
+            overflow-y: auto;
+            padding: 20px 20px 100px 20px;
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        
+        .result-handle {
+            width: 40px;
+            height: 5px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            margin: 0 auto 16px auto;
+        }
+        
+        .result-sheet .stMarkdown,
+        .result-sheet h2,
+        .result-sheet h3,
+        .result-sheet p {
+            color: #1f2937 !important;
+        }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -666,19 +703,22 @@ def _render_camera_inner() -> None:
                 
                 st.session_state.scan_status = 'complete'
                 
-                # Show results
-                st.success(f"✅ {messages['analysis_complete']}")
+                # Show results in bottom sheet
+                st.markdown('<div class="result-sheet">', unsafe_allow_html=True)
+                st.markdown('<div class="result-handle"></div>', unsafe_allow_html=True)
+                
+                st.markdown(f"### ✅ {messages['analysis_complete']}")
                 
                 # Display result
                 col1, col2 = st.columns([2, 1])
                 with col1:
-                    st.subheader(result.get('product', 'Unknown Product'))
+                    st.markdown(f"**{result.get('product', 'Unknown Product')}**")
                     
                     # Health score with color
                     score = result.get('health_score', 50)
                     color = '#10b981' if score > 70 else ('#f59e0b' if score > 40 else '#ef4444')
                     st.markdown(f"""
-                    <div style="font-size: 48px; font-weight: 800; color: {color};">
+                    <div style="font-size: 48px; font-weight: 800; color: {color}; text-align: center; margin: 12px 0;">
                         {score}/100
                     </div>
                     """, unsafe_allow_html=True)
@@ -783,6 +823,9 @@ def _render_camera_inner() -> None:
                         except Exception as e:
                             st.error(f"Error fetching alternatives: {str(e)}")
                             st.info(messages['alternatives_message'])
+                
+                # Close bottom sheet div
+                st.markdown('</div>', unsafe_allow_html=True)
                 
             # Clear pending frame
             del st.session_state.pending_analysis_frame
