@@ -177,10 +177,10 @@ def _inject_camera_css() -> None:
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
-        .pill.live { background: rgba(16,185,129,0.95); }
-        .pill.status { background: rgba(59,130,246,0.92); }
+        .camera-page .pill.live { background: rgba(16,185,129,0.95); }
+        .camera-page .pill.status { background: rgba(59,130,246,0.92); }
         
-        .dot {
+        .camera-page .dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
@@ -194,7 +194,7 @@ def _inject_camera_css() -> None:
         }
         
         /* iOS Style Bottom Controls */
-        .hud-bottom {
+        .camera-page .hud-bottom {
             position: absolute;
             bottom: 110px;
             left: 0;
@@ -208,7 +208,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Main Capture Button - iOS Style */
-        .capture-btn {
+        .camera-page .capture-btn {
             pointer-events: auto;
             width: 80px;
             height: 80px;
@@ -227,7 +227,7 @@ def _inject_camera_css() -> None:
             position: relative;
         }
         
-        .capture-btn::before {
+        .camera-page .capture-btn::before {
             content: '';
             position: absolute;
             inset: -12px;
@@ -235,13 +235,13 @@ def _inject_camera_css() -> None:
             background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
         }
         
-        .capture-btn:active {
+        .camera-page .capture-btn:active {
             transform: scale(0.90);
             box-shadow: 0 5px 15px rgba(0,0,0,0.4);
         }
         
         /* Side Control Buttons */
-        .side-control {
+        .camera-page .side-control {
             pointer-events: auto;
             width: 56px;
             height: 56px;
@@ -257,18 +257,18 @@ def _inject_camera_css() -> None:
             font-size: 24px;
         }
         
-        .side-control:hover {
+        .camera-page .side-control:hover {
             transform: scale(1.1);
             background: rgba(0, 0, 0, 0.7);
             border-color: rgba(255, 255, 255, 0.5);
         }
         
-        .side-control:active {
+        .camera-page .side-control:active {
             transform: scale(0.95);
         }
         
         /* Quick Action Pills */
-        .quick-action {
+        .camera-page .quick-action {
             pointer-events: auto;
             min-width: 80px;
             text-align: center;
@@ -285,14 +285,14 @@ def _inject_camera_css() -> None:
             transition: all 0.2s ease;
         }
         
-        .quick-action:hover {
+        .camera-page .quick-action:hover {
             background: rgba(0,0,0,0.75);
             border-color: rgba(255,255,255,0.4);
             transform: translateY(-2px);
         }
         
         /* Helper Text at Bottom */
-        .scan-helper {
+        .camera-page .scan-helper {
             position: absolute;
             bottom: 40px;
             left: 0;
@@ -312,7 +312,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Progress Ring */
-        .progress-ring {
+        .camera-page .progress-ring {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -320,7 +320,7 @@ def _inject_camera_css() -> None:
             z-index: 4;
         }
         
-        .progress-ring circle {
+        .camera-page .progress-ring circle {
             fill: transparent;
             stroke: #10b981;
             stroke-width: 4;
@@ -334,7 +334,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Detection Box */
-        .detection-box {
+        .camera-page .detection-box {
             position: absolute;
             border: 3px solid #10b981;
             border-radius: 8px;
@@ -350,7 +350,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Status Messages */
-        .status-message {
+        .camera-page .status-message {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -372,21 +372,22 @@ def _inject_camera_css() -> None:
             to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
         
-        /* Bottom Sheet for Results */
-        .result-sheet {
+        /* Bottom Sheet for Results - scoped to camera page */
+        .camera-page .result-sheet {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            max-height: 55vh;
-            background: rgba(255, 255, 255, 0.98);
+            max-height: 60vh;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 1) 100%);
             backdrop-filter: blur(20px);
-            border-radius: 24px 24px 0 0;
-            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 28px 28px 0 0;
+            box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.2);
             z-index: 150;
             overflow-y: auto;
-            padding: 20px 20px 100px 20px;
-            animation: slideUp 0.3s ease-out;
+            overflow-x: hidden;
+            padding: 24px 20px 120px 20px;
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         @keyframes slideUp {
@@ -394,18 +395,18 @@ def _inject_camera_css() -> None:
             to { transform: translateY(0); }
         }
         
-        .result-handle {
-            width: 40px;
-            height: 5px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
-            margin: 0 auto 16px auto;
+        .camera-page .result-handle {
+            width: 48px;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 4px;
+            margin: 0 auto 20px auto;
         }
         
-        .result-sheet .stMarkdown,
-        .result-sheet h2,
-        .result-sheet h3,
-        .result-sheet p {
+        .camera-page .result-sheet .stMarkdown,
+        .camera-page .result-sheet h2,
+        .camera-page .result-sheet h3,
+        .camera-page .result-sheet p {
             color: #1f2937 !important;
         }
     </style>
@@ -508,6 +509,7 @@ def _render_camera_inner() -> None:
         st.session_state.last_nutrition_snapshot = None
 
     if not WEBRTC_AVAILABLE:
+        st.markdown('</div>', unsafe_allow_html=True)  # Close camera-page wrapper before early return
         _render_upload_fallback()
         return
 
