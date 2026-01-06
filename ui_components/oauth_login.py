@@ -51,12 +51,14 @@ def _inject_oauth_css() -> None:
             font-weight: 700;
             color: {theme['text']};
             margin-bottom: 8px;
+            text-align: center;
         }}
         
         .oauth-subtitle {{
             font-size: 16px;
             color: {theme['secondary']};
             line-height: 1.5;
+            text-align: center;
         }}
         
         /* OAuth Buttons Container */
