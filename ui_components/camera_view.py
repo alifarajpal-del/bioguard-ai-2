@@ -32,10 +32,16 @@ from config.settings import (
     REGIONAL_SOURCE_DEFAULTS,
     HEALTH_SYNC_DEFAULT,
 )
-from services.nutrition_api import NutritionAPI
+from services.nutrition_api import NutritionAPI, get_pre_confidence
 from ui_components.branding import render_brand_watermark
 from ui_components.router import go_back
-from ui_components.error_ui import safe_render
+from ui_components.error_ui import safe_render, show_validation_error, show_rate_limit_error
+from ui_components.micro_ux import inject_skeleton_css, step_progress, show_processing_status
+from ui_components.ui_kit import confidence_badge, source_badge, badge, inject_ui_kit_css
+from utils.validation import sanitize_barcode, sanitize_query, rate_limit_check, ValidationError
+from utils.logging_setup import get_logger, log_user_action
+
+logger = get_logger(__name__)
 
 
 def _inject_camera_css() -> None:
