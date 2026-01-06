@@ -25,6 +25,25 @@ def render_onboarding() -> None:
     if st.session_state.get("onboarding_done"):
         return
 
+    # Center all onboarding content
+    st.markdown("""
+    <style>
+        .onboarding-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .onboarding-container h2,
+        .onboarding-container h3,
+        .onboarding-container p,
+        .onboarding-container .stMarkdown {
+            text-align: center !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="onboarding-container">', unsafe_allow_html=True)
+    
     st.markdown("## 🚀 لنبدأ")
     for screen in SCREENS:
         with st.container():
@@ -35,3 +54,5 @@ def render_onboarding() -> None:
     if st.button("ابدأ الآن", type="primary", use_container_width=True):
         st.session_state.onboarding_done = True
         st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
