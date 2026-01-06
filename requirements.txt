@@ -38,3 +38,6 @@ av>=10.0.0  # Video processing for WebRTC
 
 # Security & Encryption
 cryptography>=41.0.5  # Data encryption (Fernet)
+
+# Testing
+pytest==8.3.4
