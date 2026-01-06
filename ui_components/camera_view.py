@@ -485,158 +485,184 @@ def render_camera_view() -> None:
 
 
 def _render_camera_inner() -> None:
-    # Wrap entire camera page in scoped container
+    # Inject micro-UX CSS for skeletons and progress
+    inject_skeleton_css()
+    inject_ui_kit_css()
+    
+    # Wrap entire camera page in scoped container with try/finally to ensure closure
     st.markdown('<div class="camera-page">', unsafe_allow_html=True)
     
-    # Back button
-    if st.button("⬅️ Back", key="camera_back_home"):
-        go_back()
-    
-    render_brand_watermark("BioGuard AI")
-    
-    _inject_camera_css()
-    
-    # Initialize session state
-    if 'scan_status' not in st.session_state:
-        st.session_state.scan_status = 'searching'  # searching, detected, analyzing, complete
-    if 'last_barcode' not in st.session_state:
-        st.session_state.last_barcode = None
-    if 'analysis_history' not in st.session_state:
-        st.session_state.analysis_history = []
-    if 'language' not in st.session_state:
-        st.session_state.language = 'en'
-    if 'preferred_sources' not in st.session_state:
-        st.session_state.preferred_sources = _get_preferred_sources()
-    if 'region' not in st.session_state:
-        st.session_state.region = DEFAULT_REGION
-    if 'health_sync_enabled' not in st.session_state:
-        st.session_state.health_sync_enabled = HEALTH_SYNC_DEFAULT
-    if 'last_nutrition_snapshot' not in st.session_state:
-        st.session_state.last_nutrition_snapshot = None
+    try:
+        # Back button
+        if st.button("⬅️ Back", key="camera_back_home"):
+            go_back()
+        
+        render_brand_watermark("BioGuard AI")
+        
+        _inject_camera_css()
+        
+        # Initialize session state
+        if 'scan_status' not in st.session_state:
+            st.session_state.scan_status = 'searching'
+        if 'last_barcode' not in st.session_state:
+            st.session_state.last_barcode = None
+        if 'analysis_history' not in st.session_state:
+            st.session_state.analysis_history = []
+        if 'language' not in st.session_state:
+            st.session_state.language = 'ar'
+        if 'preferred_sources' not in st.session_state:
+            st.session_state.preferred_sources = _get_preferred_sources()
+        if 'region' not in st.session_state:
+            st.session_state.region = DEFAULT_REGION
+        if 'health_sync_enabled' not in st.session_state:
+            st.session_state.health_sync_enabled = HEALTH_SYNC_DEFAULT
+        if 'last_nutrition_snapshot' not in st.session_state:
+            st.session_state.last_nutrition_snapshot = None
 
-    if not WEBRTC_AVAILABLE:
-        st.markdown('</div>', unsafe_allow_html=True)  # Close camera-page wrapper before early return
-        _render_upload_fallback()
-        return
+        if not WEBRTC_AVAILABLE:
+            _render_upload_fallback()
+            return
 
-    # Get messages based on language
-    messages = _get_ui_messages(st.session_state.language)
-    
-    # Status indicators
-    status_text = {
-        'searching': messages['searching'],
-        'detected': messages['detected'],
-        'analyzing': messages['analyzing'],
-        'complete': messages['complete']
-    }.get(st.session_state.scan_status, messages['searching'])
+        # Get messages based on language
+        messages = _get_ui_messages(st.session_state.language)
+        
+        # Status indicators
+        status_text = {
+            'searching': messages['searching'],
+            'detected': messages['detected'],
+            'analyzing': messages['analyzing'],
+            'complete': messages['complete']
+        }.get(st.session_state.scan_status, messages['searching'])
 
-    region_options = list(REGIONAL_SOURCE_DEFAULTS.keys())
-    region_index = region_options.index(st.session_state.region) if st.session_state.region in region_options else region_options.index(DEFAULT_REGION)
+        region_options = list(REGIONAL_SOURCE_DEFAULTS.keys())
+        region_index = region_options.index(st.session_state.region) if st.session_state.region in region_options else region_options.index(DEFAULT_REGION)
 
-    with st.expander("Nutrition sources & sync", expanded=False):
-        selected_region = st.selectbox("Region defaults", region_options, index=region_index)
-        preferred_sources = st.multiselect(
-            "Preferred sources (first wins)",
-            DEFAULT_PREFERRED_SOURCES,
-            default=_get_preferred_sources(selected_region),
-            help="Order determines lookup priority",
+        with st.expander("Nutrition sources & sync", expanded=False):
+            selected_region = st.selectbox("Region defaults", region_options, index=region_index)
+            preferred_sources = st.multiselect(
+                "Preferred sources (first wins)",
+                DEFAULT_PREFERRED_SOURCES,
+                default=_get_preferred_sources(selected_region),
+                help="Order determines lookup priority",
+            )
+            sync_enabled = st.checkbox(
+                "Sync with Health apps",
+                value=st.session_state.health_sync_enabled,
+                help="Enable HealthKit / Health Connect sync for nutrition entries",
+            )
+
+            if (
+                selected_region != st.session_state.region
+                or preferred_sources != st.session_state.preferred_sources
+                or sync_enabled != st.session_state.health_sync_enabled
+            ):
+                st.session_state.region = selected_region
+                st.session_state.preferred_sources = preferred_sources or _get_preferred_sources(selected_region)
+                st.session_state.health_sync_enabled = sync_enabled
+
+                user_id = st.session_state.get('user_id')
+                if user_id:
+                    db = get_db_manager()
+                    db.update_user_settings(
+                        user_id,
+                        health_sync_enabled=sync_enabled,
+                        region=selected_region,
+                        preferred_sources=st.session_state.preferred_sources,
+                    )
+
+        rtc_config = RTCConfiguration({
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+            ]
+        })
+
+        constraints: Dict[str, Any] = {
+            "video": {
+                "width": {"max": 1280, "ideal": 720},
+                "height": {"max": 720, "ideal": 480},
+                "frameRate": {"max": 30, "ideal": 15},
+                "facingMode": "environment",
+            },
+            "audio": False,
+        }
+
+        st.markdown('<div class="scan-stage">', unsafe_allow_html=True)
+        
+        # Start WebRTC with custom processor
+        ctx = webrtc_streamer(
+            key="bioguard-ar-live",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=rtc_config,
+            media_stream_constraints=constraints,
+            video_processor_factory=LiveVisionProcessor,
+            desired_playing_state=True,
+            video_html_attrs={"autoPlay": True, "playsInline": True, "controls": False, "muted": True},
+            async_processing=True,
         )
-        sync_enabled = st.checkbox(
-            "Sync with Health apps",
-            value=st.session_state.health_sync_enabled,
-            help="Enable HealthKit / Health Connect sync for nutrition entries",
-        )
 
-        if (
-            selected_region != st.session_state.region
-            or preferred_sources != st.session_state.preferred_sources
-            or sync_enabled != st.session_state.health_sync_enabled
-        ):
-            st.session_state.region = selected_region
-            st.session_state.preferred_sources = preferred_sources or _get_preferred_sources(selected_region)
-            st.session_state.health_sync_enabled = sync_enabled
-
-            user_id = st.session_state.get('user_id')
-            if user_id:
-                db = get_db_manager()
-                db.update_user_settings(
-                    user_id,
-                    health_sync_enabled=sync_enabled,
-                    region=selected_region,
-                    preferred_sources=st.session_state.preferred_sources,
-                )
-
-    rtc_config = RTCConfiguration({
-        "iceServers": [
-            {"urls": ["stun:stun.l.google.com:19302"]},
-            {"urls": ["stun:stun1.l.google.com:19302"]},
-            {"urls": ["stun:stun2.l.google.com:19302"]},
-        ]
-    })
-
-    constraints: Dict[str, Any] = {
-        "video": {
-            "width": {"max": 1280, "ideal": 720},
-            "height": {"max": 720, "ideal": 480},
-            "frameRate": {"max": 30, "ideal": 15},
-            "facingMode": "environment",
-        },
-        "audio": False,
-    }
-
-    st.markdown('<div class="scan-stage">', unsafe_allow_html=True)
-    
-    # Start WebRTC with custom processor
-    ctx = webrtc_streamer(
-        key="bioguard-ar-live",
-        mode=WebRtcMode.SENDRECV,
-        rtc_configuration=rtc_config,
-        media_stream_constraints=constraints,
-        video_processor_factory=LiveVisionProcessor,
-        desired_playing_state=True,
-        video_html_attrs={"autoPlay": True, "playsInline": True, "controls": False, "muted": True},
-        async_processing=True,
-    )
-
-    # Dynamic HUD with iOS grid overlay
-    hud_html = f"""
-    <div class="camera-grid"></div>
-    <div class="scan-overlay"></div>
-    <div class="hud-top">
-        <div class="pill live"><span class="dot"></span>{messages['live']}</div>
-        <div class="pill status">{status_text}</div>
-    </div>
-    """
-    
-    # Show progress ring when analyzing
-    if st.session_state.scan_status == 'analyzing':
-        hud_html += """
-        <div class="progress-ring">
-            <svg width="80" height="80">
-                <circle cx="40" cy="40" r="36"></circle>
-            </svg>
+        # Dynamic HUD with iOS grid overlay
+        hud_html = f"""
+        <div class="camera-grid"></div>
+        <div class="scan-overlay"></div>
+        <div class="hud-top">
+            <div class="pill live"><span class="dot"></span>{messages['live']}</div>
+            <div class="pill status">{status_text}</div>
         </div>
         """
-    
-    hud_html += f"""
-    <div class="hud-bottom">
-        <div class="side-control" onclick="alert('{messages['flash_tip']}')" title="Flash">💡</div>
-        <div class="capture-btn" onclick="console.log('manual capture')" title="Capture">⬤</div>
-        <div class="side-control" onclick="alert('Switch Camera')" title="Switch">🔄</div>
-    </div>
-    <div class="scan-helper">
-        📸 {messages.get('camera_guide', 'وجّه الكاميرا نحو المنتج للمسح التلقائي')}
-    </div>
-    </div>
-    """
+        
+        # Show progress ring when analyzing
+        if st.session_state.scan_status == 'analyzing':
+            hud_html += """
+            <div class="progress-ring">
+                <svg width="80" height="80">
+                    <circle cx="40" cy="40" r="36"></circle>
+                </svg>
+            </div>
+            """
+        
+        hud_html += f"""
+        <div class="hud-bottom">
+            <div class="side-control" onclick="alert('{messages['flash_tip']}')" title="Flash">💡</div>
+            <div class="capture-btn" onclick="console.log('manual capture')" title="Capture">⬤</div>
+            <div class="side-control" onclick="alert('Switch Camera')" title="Switch">🔄</div>
+        </div>
+        <div class="scan-helper">
+            📸 {messages.get('camera_guide', 'وجّه الكاميرا نحو المنتج للمسح التلقائي')}
+        </div>
+        </div>
+        """
 
-    if ctx and ctx.state.playing:
-        st.markdown(hud_html, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        if ctx and ctx.state.playing:
+            st.markdown(hud_html, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         
         # Check for pending analysis
         if 'pending_analysis_frame' in st.session_state:
             st.session_state.scan_status = 'analyzing'
+            
+            # Show immediate status with step progress
+            log_user_action(logger, 'scan_initiated', {'type': 'vision'})
+            
+            # Rate limit check
+            allowed, rate_msg = rate_limit_check(st.session_state, 'scan_calls', max_calls=10, window_seconds=60)
+            if not allowed:
+                show_rate_limit_error(rate_msg)
+                del st.session_state.pending_analysis_frame
+                return
+            
+            # Show step progress
+            step_progress(["كشف", "تحليل", "نتائج"], active_index=1)
+            
+            # Show pre-confidence for vision
+            pre_conf = get_pre_confidence('vision')
+            st.markdown(f"""
+            <div style="padding: 12px; background: rgba(59,130,246,0.1); border-radius: 8px; margin: 12px 0;">
+                {badge("جاري التحليل...", "info", "🔍")}
+                {confidence_badge(pre_conf, "الثقة الأولية")}
+            </div>
+            """, unsafe_allow_html=True)
             
             # Convert frame to bytes
             frame = st.session_state.pending_analysis_frame
@@ -697,6 +723,10 @@ def _render_camera_inner() -> None:
                 
                 # Save to history
                 st.session_state.analysis_history.append(result)
+                log_user_action(logger, 'analysis_complete', {
+                    'score': result.get('health_score', 0),
+                    'product': result.get('product', 'unknown')
+                })
                 db.save_food_analysis(user_id, result)
 
                 if st.session_state.health_sync_enabled and result.get('nutrients'):
@@ -711,25 +741,36 @@ def _render_camera_inner() -> None:
                 
                 st.session_state.scan_status = 'complete'
                 
-                # Show results in bottom sheet
-                st.markdown('<div class="result-sheet">', unsafe_allow_html=True)
-                st.markdown('<div class="result-handle"></div>', unsafe_allow_html=True)
+                # Show step progress complete
+                step_progress(["كشف", "تحليل", "نتائج"], active_index=2)
                 
-                st.markdown(f"### ✅ {messages['analysis_complete']}")
+                # Show results using ui_kit
+                st.markdown(card(
+                    title=f"✅ {messages['analysis_complete']}",
+                    content=""
+                ), unsafe_allow_html=True)
                 
                 # Display result
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     st.markdown(f"**{result.get('product', 'Unknown Product')}**")
                     
-                    # Health score with color
+                    # Health score with ui_kit metric
                     score = result.get('health_score', 50)
-                    color = '#10b981' if score > 70 else ('#f59e0b' if score > 40 else '#ef4444')
-                    st.markdown(f"""
-                    <div style="font-size: 48px; font-weight: 800; color: {color}; text-align: center; margin: 12px 0;">
-                        {score}/100
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(metric(
+                        label=messages.get('health_score', 'Health Score'),
+                        value=f"{score}/100",
+                        icon="❤️"
+                    ), unsafe_allow_html=True)
+                    
+                    # Metadata badges
+                    badges_html = confidence_badge(
+                        result.get('confidence', pre_conf),
+                        messages.get('confidence', 'Confidence')
+                    )
+                    if result.get('data_source'):
+                        badges_html += " " + source_badge(result['data_source'])
+                    st.markdown(f'<div style="margin: 8px 0;">{badges_html}</div>', unsafe_allow_html=True)
                     
                     # Warnings
                     if result.get('warnings'):
@@ -743,13 +784,20 @@ def _render_camera_inner() -> None:
                     nutrients = result.get('nutrients') or {}
                     if nutrients:
                         with st.expander(messages.get('nutrition_details', 'Nutrition breakdown')):
-                            st.write({
-                                'calories': nutrients.get('calories'),
-                                'carbs': nutrients.get('carbohydrates') or nutrients.get('carbs'),
-                                'fat': nutrients.get('fat'),
-                                'protein': nutrients.get('protein'),
-                                'sugar': nutrients.get('sugars') or nutrients.get('sugar'),
-                            })
+                            # Use native columns for macro breakdown
+                            cols = st.columns(3)
+                            macros = [
+                                ('🔥', 'Calories', nutrients.get('calories')),
+                                ('🍞', 'Carbs', nutrients.get('carbohydrates') or nutrients.get('carbs')),
+                                ('🥑', 'Fat', nutrients.get('fat')),
+                                ('🍗', 'Protein', nutrients.get('protein')),
+                                ('🍬', 'Sugar', nutrients.get('sugars') or nutrients.get('sugar')),
+                            ]
+                            for i, (icon, label, value) in enumerate(macros[:3]):
+                                if value:
+                                    with cols[i]:
+                                        st.metric(label=f"{icon} {label}", value=value)
+                            
                             if result.get('data_source'):
                                 st.caption(f"Source: {result['data_source']}")
                 
@@ -897,19 +945,22 @@ def _render_camera_inner() -> None:
                                 }
                             )
                 
-        # Show analysis history
-        if st.session_state.analysis_history:
-            with st.expander(f"📜 {messages['history']} ({len(st.session_state.analysis_history)})", expanded=False):
-                for idx, analysis in enumerate(reversed(st.session_state.analysis_history[-5:])):
-                    st.markdown(f"**{idx+1}.** {analysis.get('product', 'Unknown')} - Score: {analysis.get('health_score', 'N/A')}")
-                    
-    else:
-        st.info(messages.get('allow_camera', 'Allow camera access and refresh, or upload a photo below.'))
-        st.markdown("</div>", unsafe_allow_html=True)
-        with st.expander(messages.get('how_to_scan', 'How to scan')):
-            st.markdown(messages.get('scan_instructions', '1) Allow camera • 2) Point to product • 3) Wait or upload below'))
-        _render_upload_fallback()
-        return
+            # Show analysis history
+            if st.session_state.analysis_history:
+                with st.expander(f"📜 {messages['history']} ({len(st.session_state.analysis_history)})", expanded=False):
+                    for idx, analysis in enumerate(reversed(st.session_state.analysis_history[-5:])):
+                        st.markdown(f"**{idx+1}.** {analysis.get('product', 'Unknown')} - Score: {analysis.get('health_score', 'N/A')}")
+                        
+        else:
+            st.info(messages.get('allow_camera', 'Allow camera access and refresh, or upload a photo below.'))
+            st.markdown("</div>", unsafe_allow_html=True)
+            with st.expander(messages.get('how_to_scan', 'How to scan')):
+                st.markdown(messages.get('scan_instructions', '1) Allow camera • 2) Point to product • 3) Wait or upload below'))
+            _render_upload_fallback()
+    
+    finally:
+        # ALWAYS close camera page wrapper
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _get_ui_messages(language: str = 'en') -> Dict[str, str]:
@@ -1161,7 +1212,4 @@ def _render_upload_fallback() -> None:
         
         if st.session_state.get('analysis_history'):
             st.markdown(f"**{messages.get('history', 'History')}:** {len(st.session_state.analysis_history)} scans")
-    
-    # Close camera page wrapper
-    st.markdown('</div>', unsafe_allow_html=True)
 

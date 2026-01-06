@@ -10,6 +10,11 @@ import pandas as pd
 from datetime import datetime, timedelta
 from ui_components.theme_wheel import get_current_theme
 from ui_components.error_ui import safe_render
+from ui_components.micro_ux import skeleton_card, inject_skeleton_css
+from ui_components.ui_kit import card, metric, badge, inject_ui_kit_css
+from utils.logging_setup import get_logger, log_user_action
+
+logger = get_logger(__name__)
 
 
 def render_dashboard() -> None:
@@ -18,10 +23,21 @@ def render_dashboard() -> None:
 
 
 def _render_dashboard_inner() -> None:
+    # Inject CSS
+    inject_skeleton_css()
+    inject_ui_kit_css()
+    
     theme = get_current_theme()
     _inject_dashboard_css(theme)
+    
+    log_user_action(logger, 'dashboard_view', {})
+    
     st.markdown("## 🏠 لوحة التحكم")
-    _modern_stats_cards(theme)
+    
+    # Show skeleton while loading
+    with st.spinner(""):
+        _modern_stats_cards(theme)
+    
     st.divider()
 
     col1, col2 = st.columns(2, gap="large")
@@ -149,54 +165,48 @@ def _modern_stats_cards(theme: dict) -> None:
     """Display modern statistics cards with circular icons."""
     cols = st.columns(4, gap="medium")
     
+    # Get data (in real app, from database)
+    history = st.session_state.get('analysis_history', [])
+    total_scans = len(history)
+    avg_score = sum([r.get('health_score', 0) for r in history]) / max(total_scans, 1) if history else 85
+    safe_count = sum([1 for r in history if r.get('health_score', 0) > 70])
+    warnings = sum([len(r.get('warnings', [])) for r in history])
+    
     stats = [
         {
             "icon": "💚",
             "label": "Health Score",
-            "value": "85",
+            "value": f"{int(avg_score)}",
             "delta": "+4 من الأسبوع الماضي",
-            "color": "#10b981",
-            "color_light": "#34d399"
         },
         {
             "icon": "🔬",
             "label": "Total Scans",
-            "value": "142",
+            "value": f"{total_scans}",
             "delta": "+12 اليوم",
-            "color": "#3b82f6",
-            "color_light": "#60a5fa"
         },
         {
             "icon": "⚠️",
             "label": "Warnings",
-            "value": "3",
+            "value": f"{warnings}",
             "delta": "بحاجة للمراجعة",
-            "color": "#f59e0b",
-            "color_light": "#fbbf24"
         },
         {
             "icon": "✅",
             "label": "Safe Items",
-            "value": "128",
-            "delta": "90% معدل الأمان",
-            "color": "#22c55e",
-            "color_light": "#4ade80"
+            "value": f"{safe_count}",
+            "delta": f"{int(safe_count/max(total_scans, 1)*100)}% معدل الأمان" if total_scans else "0%",
         },
     ]
     
     for col, stat in zip(cols, stats):
         with col:
-            st.markdown(
-                f"""
-                <div class="stat-card" style="--card-color: {stat['color']}; --card-color-light: {stat['color_light']};">
-                    <div class="icon-circle">{stat['icon']}</div>
-                    <div class="stat-label">{stat['label']}</div>
-                    <div class="stat-value">{stat['value']}</div>
-                    <div class="stat-delta">{stat['delta']}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(metric(
+                label=stat['label'],
+                value=stat['value'],
+                delta=stat.get('delta'),
+                icon=stat['icon']
+            ), unsafe_allow_html=True)
 
 
 def _health_score_trend(theme: dict) -> None:

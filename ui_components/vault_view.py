@@ -4,6 +4,11 @@ import streamlit as st
 from datetime import datetime
 from ui_components.theme_wheel import get_current_theme
 from ui_components.error_ui import safe_render
+from ui_components.micro_ux import skeleton_card, inject_skeleton_css
+from ui_components.ui_kit import card, badge, inject_ui_kit_css
+from utils.logging_setup import get_logger, log_user_action
+
+logger = get_logger(__name__)
 
 
 def render_vault() -> None:
@@ -12,15 +17,22 @@ def render_vault() -> None:
 
 
 def _render_vault_inner() -> None:
+    # Inject CSS
+    inject_skeleton_css()
+    inject_ui_kit_css()
+    
     theme = get_current_theme()
     
     # Back to home button
     if st.button("🔙 رجوع إلى الرئيسية", key="vault_back_home"):
+        log_user_action(logger, 'navigate_home', {})
         st.session_state.current_page = "home"
         st.rerun()
     
     # Inject vault-specific CSS
     _inject_vault_css(theme)
+    
+    log_user_action(logger, 'vault_view', {})
     
     st.markdown("## 🗄️ المخزن الطبي")
     
@@ -28,8 +40,9 @@ def _render_vault_inner() -> None:
     if "medical_history" not in st.session_state:
         st.session_state.medical_history = []
     
-    # Category Grid
-    _render_category_grid(theme)
+    # Category Grid with skeleton loader
+    with st.spinner(""):
+        _render_category_grid(theme)
     
     st.divider()
     
@@ -417,23 +430,15 @@ def _files_list(theme: dict) -> None:
         filtered_docs = st.session_state.medical_history
         st.markdown(f"**{len(filtered_docs)} مستند في المخزن**")
     
-    # Display documents
+    # Display documents using ui_kit cards
     for idx, doc in enumerate(filtered_docs):
         col1, col2, col3 = st.columns([5, 1, 1])
         
         with col1:
-            st.markdown(
-                f"""
-                <div class="doc-card">
-                    <div class="doc-icon-wrapper">{doc['icon']}</div>
-                    <div class="doc-info">
-                        <div class="doc-name">{doc['name']}</div>
-                        <div class="doc-meta">{doc['size']} • {doc['date']}</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(card(
+                title=f"{doc['icon']} {doc['name']}",
+                content=f"{badge(doc['size'], 'secondary')} {badge(doc['date'], 'info')}"
+            ), unsafe_allow_html=True)
         
         with col2:
             if st.button("👁️", key=f"view_{idx}", use_container_width=True, help="عرض"):
