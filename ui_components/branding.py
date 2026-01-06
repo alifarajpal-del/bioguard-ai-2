@@ -15,12 +15,16 @@ from ui_components.theme_wheel import get_current_theme
 @lru_cache(maxsize=1)
 def load_logo_image() -> Optional[Image.Image]:
     """Load branding logo from assets once."""
-    logo_path = Path(__file__).parent / "assets" / "logo.png"
+    logo_path = Path(__file__).resolve().parent / "assets" / "logo.png"
     if not logo_path.exists():
+        import streamlit as st
+        st.warning(f"⚠️ Logo file not found at: {logo_path}")
         return None
     try:
         return Image.open(logo_path)
-    except Exception:
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"⚠️ Could not load logo: {e}")
         return None
 
 

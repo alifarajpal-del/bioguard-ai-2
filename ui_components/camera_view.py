@@ -42,8 +42,8 @@ def _inject_camera_css() -> None:
     """Inject iOS-style camera CSS with grid overlay and modern controls"""
     css = """
     <style>
-        /* iOS Native Camera - Full Screen */
-        .scan-stage {
+        /* Scoped: iOS Native Camera - Full Screen */
+        .camera-page .scan-stage {
             position: fixed;
             top: 0;
             left: 0;
@@ -55,7 +55,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Force WebRTC container to fill */
-        .scan-stage [data-testid="stWebRtc"] {
+        .camera-page .scan-stage [data-testid="stWebRtc"] {
             position: absolute !important;
             top: 0 !important;
             left: 0 !important;
@@ -65,7 +65,7 @@ def _inject_camera_css() -> None:
         }
         
         /* Video element - cover entire screen */
-        .scan-stage video {
+        .camera-page .scan-stage video {
             position: absolute !important;
             top: 0 !important;
             left: 0 !important;
@@ -441,8 +441,11 @@ def render_camera_view() -> None:
 
 
 def _render_camera_inner() -> None:
+    # Wrap entire camera page in scoped container
+    st.markdown('<div class="camera-page">', unsafe_allow_html=True)
+    
     # Back button
-    if st.button("⬅️ رجوع", key="camera_back_home"):
+    if st.button("⬅️ Back", key="camera_back_home"):
         go_back()
     
     render_brand_watermark("BioGuard AI")
@@ -1107,4 +1110,7 @@ def _render_upload_fallback() -> None:
         
         if st.session_state.get('analysis_history'):
             st.markdown(f"**{messages.get('history', 'History')}:** {len(st.session_state.analysis_history)} scans")
+    
+    # Close camera page wrapper
+    st.markdown('</div>', unsafe_allow_html=True)
 

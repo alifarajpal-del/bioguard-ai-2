@@ -128,107 +128,67 @@ def render_bottom_navigation():
         }}
         
         /* Hide default Streamlit button styling in nav */
-        .nav-dock .stButton > button {{
+        .nav-dock .stButton > button {
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
             padding: 0 !important;
             width: 100% !important;
             height: auto !important;
-        }}
+            color: transparent !important;
+            font-size: 0 !important;
+        }
         
-        .nav-dock .stButton > button:hover {{
+        .nav-dock .stButton > button:hover {
             background: transparent !important;
             border: none !important;
             transform: none !important;
-        }}
-
-        /* Swipe handle hint */
-        .swipe-handle {{
-            position: fixed;
-            bottom: 90px;
-            left: 0;
-            right: 0;
-            height: 50px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: {theme['text']};
-            z-index: 99998;
-        }}
+        }
+        
+        .nav-dock .stButton > button:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="swipe-handle">اسحب لليسار للتالي • اسحب لليمين للرجوع</div>', unsafe_allow_html=True)
-
-    # Bottom Navigation Bar
-    nav_container = st.container()
-    with nav_container:
-        st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
-        
-        nav_items = [
-            ("dashboard", "🏠", "الرئيسية"),
-            ("scan", "📸", "الكاميرا"),
-            ("vault", "🗄️", "المخزن"),
-            ("settings", "⚙️", "الإعدادات"),
-        ]
-        
-        # Create navigation using streamlit buttons
-        cols = st.columns(4)
-        for col, (page, icon, label) in zip(cols, nav_items):
-            with col:
-                is_active = page == active_page
-                button_type = "primary" if is_active else "secondary"
-                
-                if st.button(
-                    f"{icon}\n{label}",
-                    key=f"nav_{page}",
-                    use_container_width=True,
-                    type=button_type,
-                    help=f"انتقل إلى {label}"
-                ):
-                    go_to(page)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Touch swipe listener injected once per render (left/right)
-        swipe_placeholder = st.empty()
-        try:
-            swipe_placeholder.components.v1.html(
-                """
-                <script>
-                    let startX = null;
-                    let startY = null;
-                    document.addEventListener('touchstart', function(e) {
-                        startX = e.touches[0].clientX;
-                        startY = e.touches[0].clientY;
-                    });
-                    document.addEventListener('touchend', function(e) {
-                        if (startX === null || startY === null) return;
-                        const endX = e.changedTouches[0].clientX;
-                        const endY = e.changedTouches[0].clientY;
-                        const deltaX = endX - startX;
-                        const deltaY = endY - startY;
-                        if (Math.abs(deltaX) > 60 && Math.abs(deltaY) < 50) {
-                            if (deltaX < 0) {
-                                window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_next', value: true}, '*');
-                            } else {
-                                window.parent.postMessage({type: 'streamlit:setComponentValue', key: 'swipe_prev', value: true}, '*');
-                            }
-                        }
-                        startX = null;
-                        startY = null;
-                    });
-                </script>
-                """,
-                height=0,
-            )
-        except Exception:
-            st.warning("Swipe navigation unavailable right now.")
+    # Bottom Navigation Bar with functional Streamlit buttons
+    st.markdown('<div class="nav-dock">', unsafe_allow_html=True)
+    
+    nav_items = [
+        ("dashboard", "🏠", "Dashboard"),
+        ("scan", "📸", "Scan"),
+        ("vault", "🗄️", "Vault"),
+        ("settings", "⚙️", "Settings"),
+    ]
+    
+    # Create navigation buttons with Streamlit native components
+    cols = st.columns(4)
+    for col, (page, icon, label) in zip(cols, nav_items):
+        with col:
+            # Wrap in div with active class if this is the active page
+            active_class = "active" if page == active_page else ""
+            st.markdown(f'''
+                <div class="nav-item {active_class}">
+                    <div class="nav-icon">{icon}</div>
+                    <div class="nav-label">{label}</div>
+                </div>
+            ''', unsafe_allow_html=True)
+            
+            # Use invisible button that triggers navigation
+            if st.button(
+                label,
+                key=f"nav_btn_{page}",
+                use_container_width=True,
+                help=f"Go to {label}",
+                disabled=page == active_page
+            ):
+                go_to(page)
+                st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def get_active_page() -> str:
