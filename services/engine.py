@@ -9,7 +9,7 @@ import asyncio
 import base64
 import os
 
-from config.settings import GEMINI_API_KEY, OPENAI_API_KEY
+from app_config.settings import GEMINI_API_KEY, OPENAI_API_KEY
 
 # Configure logging
 logger = logging.getLogger(__name__)

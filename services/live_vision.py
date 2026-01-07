@@ -15,7 +15,7 @@ import asyncio
 import logging
 from datetime import datetime
 from models.schemas import DetectionResult
-from config.settings import (
+from app_config.settings import (
     YOLO_MODEL, CONFIDENCE_THRESHOLD, DETECTION_FPS,
     FRAME_RESIZE_WIDTH, FRAME_RESIZE_HEIGHT,
     AR_BUBBLE_COLOR, AR_BUBBLE_THICKNESS, AR_TEXT_SCALE,

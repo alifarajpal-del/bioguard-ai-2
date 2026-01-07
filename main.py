@@ -30,7 +30,7 @@ st.set_page_config(
 )
 
 # Imports
-from config.settings import MOBILE_VIEWPORT
+from app_config.settings import MOBILE_VIEWPORT
 from ui_components.theme_wheel import render_theme_wheel
 from ui_components.navigation import render_bottom_navigation, get_active_page
 from ui_components.dashboard_view import render_dashboard

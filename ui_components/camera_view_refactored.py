@@ -34,7 +34,7 @@ def _is_streamlit_cloud() -> bool:
 # Disable WebRTC on Cloud by default (unstable)
 WEBRTC_ENABLED = WEBRTC_AVAILABLE and not _is_streamlit_cloud()
 
-from config.settings import SUPPORTED_LANGUAGES
+from app_config.settings import SUPPORTED_LANGUAGES
 from database.db_manager import get_db_manager
 from services.engine import analyze_image_sync
 from services.video_processor import BioGuardVideoProcessor, get_video_processor_factory

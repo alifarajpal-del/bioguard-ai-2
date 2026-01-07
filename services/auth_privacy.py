@@ -14,7 +14,7 @@ import pyotp
 from cryptography.fernet import Fernet
 import base64
 
-from config.settings import (
+from app_config.settings import (
     JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS,
     FEDERATED_LEARNING_ENABLED
 )

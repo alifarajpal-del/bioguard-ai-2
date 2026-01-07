@@ -136,7 +136,7 @@ def get_logger(name: str = 'bioguard') -> logging.Logger:
     
     # Setup if not already configured
     if not logger.handlers:
-        from config.settings import LOG_LEVEL
+        from app_config.settings import LOG_LEVEL
         setup_logging(level=LOG_LEVEL)
     
     return logger

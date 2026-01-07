@@ -6,7 +6,7 @@ Provides automatic translation of analysis results and UI elements.
 import logging
 from typing import Dict, Any, Optional
 import requests
-from config.settings import TRANSLATION_API_KEY, AUTO_TRANSLATE_RESULTS
+from app_config.settings import TRANSLATION_API_KEY, AUTO_TRANSLATE_RESULTS
 
 logger = logging.getLogger(__name__)
 

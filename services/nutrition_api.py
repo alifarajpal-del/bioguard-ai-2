@@ -14,7 +14,7 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
 from database.db_manager import get_db_manager
-from config.settings import CACHE_ENABLED
+from app_config.settings import CACHE_ENABLED
 from utils.logging_setup import get_logger
 
 logger = get_logger(__name__)

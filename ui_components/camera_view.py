@@ -26,7 +26,7 @@ except ImportError:
         "⚠️ streamlit-webrtc is not installed. Camera view will use upload fallback."
     )
 
-from config.settings import (
+from app_config.settings import (
     DEFAULT_PREFERRED_SOURCES,
     DEFAULT_REGION,
     DETECTION_FPS,

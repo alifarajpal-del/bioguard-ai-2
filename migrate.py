@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from database.db_manager import DatabaseManager
-from config.settings import DATABASE_PATH
+from app_config.settings import DATABASE_PATH
 
 
 def migrate_add_roles():

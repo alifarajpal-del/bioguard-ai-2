@@ -23,7 +23,7 @@ except ImportError:
     chromadb = None
 
 import networkx as nx
-from config.settings import (
+from app_config.settings import (
     DATABASE_PATH, VECTOR_DB_PATH, GRAPH_DB_PATH, CACHE_ENABLED, CACHE_TTL_SECONDS
 )
 
