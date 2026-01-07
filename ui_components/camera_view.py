@@ -871,12 +871,18 @@ def _render_camera_inner() -> None:
 
             # Convert frame to bytes
             frame = st.session_state.pending_analysis_frame
+            
+            # Ensure frame is BGR or RGB (not RGBA)
+            import cv2 as cv
+            if len(frame.shape) == 3 and frame.shape[2] == 4:
+                # BGRA to BGR
+                frame = cv.cvtColor(frame, cv.COLOR_BGRA2BGR)
+            
             image = Image.fromarray(frame)
-            # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
-            if image.mode in ('RGBA', 'LA', 'P'):
-                rgb_image = Image.new('RGB', image.size, (255, 255, 255))
-                rgb_image.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
-                image = rgb_image
+            # Convert to RGB if needed (Image might be BGR from OpenCV)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
             buf = BytesIO()
             image.save(buf, format="JPEG", quality=95)
 
@@ -1361,12 +1367,18 @@ def _render_upload_fallback() -> None:
                 messages.get("analyzing", "Analyze"), use_container_width=True
             ):
                 # Convert to bytes
+                # Ensure image is in RGB mode (JPEG doesn't support transparency)
+                if image.mode != 'RGB':
+                    # Handle RGBA, LA, P, etc.
+                    if image.mode == 'RGBA':
+                        # Create white background
+                        background = Image.new('RGB', image.size, (255, 255, 255))
+                        background.paste(image, mask=image.split()[3])
+                        image = background
+                    else:
+                        image = image.convert('RGB')
+                
                 buf = BytesIO()
-                # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
-                if image.mode in ('RGBA', 'LA', 'P'):
-                    rgb_image = Image.new('RGB', image.size, (255, 255, 255))
-                    rgb_image.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
-                    image = rgb_image
                 image.save(buf, format="JPEG", quality=95)
 
                 # Analyze
