@@ -1,13 +1,15 @@
 """Medical Vault view with modern grid-based card design."""
 
-import streamlit as st
 from datetime import datetime
-from ui_components.theme_wheel import get_current_theme
+
+import streamlit as st
+
 from ui_components.error_ui import safe_render
-from ui_components.micro_ux import skeleton_card, inject_skeleton_css
-from ui_components.ui_kit import card, badge, inject_ui_kit_css
+from ui_components.micro_ux import inject_skeleton_css, skeleton_card
+from ui_components.theme_wheel import get_current_theme
+from ui_components.ui_kit import badge, card, inject_ui_kit_css
+from utils.i18n import get_lang, t
 from utils.logging_setup import get_logger, log_user_action
-from utils.i18n import t, get_lang
 
 logger = get_logger(__name__)
 
@@ -21,39 +23,39 @@ def _render_vault_inner() -> None:
     # Inject CSS
     inject_skeleton_css()
     inject_ui_kit_css()
-    
+
     theme = get_current_theme()
-    
+
     # Back to home button
     if st.button("🔙 رجوع إلى الرئيسية", key="vault_back_home"):
-        log_user_action(logger, 'navigate_home', {})
+        log_user_action(logger, "navigate_home", {})
         st.session_state.current_page = "home"
         st.rerun()
-    
+
     # Inject vault-specific CSS
     _inject_vault_css(theme)
-    
-    log_user_action(logger, 'vault_view', {})
-    
+
+    log_user_action(logger, "vault_view", {})
+
     st.markdown(f"## 🗄️ {t('vault_title')}")
-    
+
     # Initialize medical history in session state
     if "medical_history" not in st.session_state:
         st.session_state.medical_history = []
-    
+
     # Category Grid with skeleton loader
     with st.spinner(""):
         _render_category_grid(theme)
-    
+
     st.divider()
-    
+
     # Upload Section
     _upload_box(theme)
-    
+
     st.divider()
-    
+
     # Documents List
-    _files_list(theme)
+    _files_list()
 
 
 def _inject_vault_css(theme: dict) -> None:
@@ -244,16 +246,41 @@ def _inject_vault_css(theme: dict) -> None:
 def _render_category_grid(theme: dict) -> None:
     """Render medical document categories in grid layout"""
     st.markdown("### 📂 فئات الملفات الطبية")
-    
+
     # Calculate counts first
     total = len(st.session_state.medical_history)
-    count_tests = sum(1 for doc in st.session_state.medical_history if "test" in doc.get("name", "").lower() or "lab" in doc.get("name", "").lower())
-    count_reports = sum(1 for doc in st.session_state.medical_history if "report" in doc.get("name", "").lower())
-    count_prescriptions = sum(1 for doc in st.session_state.medical_history if "prescription" in doc.get("name", "").lower() or "med" in doc.get("name", "").lower())
-    count_vaccines = sum(1 for doc in st.session_state.medical_history if "vaccine" in doc.get("name", "").lower() or "vac" in doc.get("name", "").lower())
-    count_xrays = sum(1 for doc in st.session_state.medical_history if "xray" in doc.get("name", "").lower() or "scan" in doc.get("name", "").lower())
-    count_other = total - (count_tests + count_reports + count_prescriptions + count_vaccines + count_xrays)
-    
+    count_tests = sum(
+        1
+        for doc in st.session_state.medical_history
+        if "test" in doc.get("name", "").lower() or "lab" in doc.get("name", "").lower()
+    )
+    count_reports = sum(
+        1
+        for doc in st.session_state.medical_history
+        if "report" in doc.get("name", "").lower()
+    )
+    count_prescriptions = sum(
+        1
+        for doc in st.session_state.medical_history
+        if "prescription" in doc.get("name", "").lower()
+        or "med" in doc.get("name", "").lower()
+    )
+    count_vaccines = sum(
+        1
+        for doc in st.session_state.medical_history
+        if "vaccine" in doc.get("name", "").lower()
+        or "vac" in doc.get("name", "").lower()
+    )
+    count_xrays = sum(
+        1
+        for doc in st.session_state.medical_history
+        if "xray" in doc.get("name", "").lower()
+        or "scan" in doc.get("name", "").lower()
+    )
+    count_other = total - (
+        count_tests + count_reports + count_prescriptions + count_vaccines + count_xrays
+    )
+
     # Define categories with icons and colors
     categories = [
         {
@@ -263,7 +290,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "🧪",
             "color": "#3b82f6",
             "color_light": "#60a5fa",
-            "count": count_tests
+            "count": count_tests,
         },
         {
             "id": "reports",
@@ -272,7 +299,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "📋",
             "color": "#8b5cf6",
             "color_light": "#a78bfa",
-            "count": count_reports
+            "count": count_reports,
         },
         {
             "id": "prescriptions",
@@ -281,7 +308,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "💊",
             "color": "#ec4899",
             "color_light": "#f472b6",
-            "count": count_prescriptions
+            "count": count_prescriptions,
         },
         {
             "id": "vaccines",
@@ -290,7 +317,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "💉",
             "color": "#10b981",
             "color_light": "#34d399",
-            "count": count_vaccines
+            "count": count_vaccines,
         },
         {
             "id": "xrays",
@@ -299,7 +326,7 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "🏥",
             "color": "#f59e0b",
             "color_light": "#fbbf24",
-            "count": count_xrays
+            "count": count_xrays,
         },
         {
             "id": "other",
@@ -308,18 +335,18 @@ def _render_category_grid(theme: dict) -> None:
             "icon": "📄",
             "color": "#64748b",
             "color_light": "#94a3b8",
-            "count": count_other
+            "count": count_other,
         },
     ]
-    
+
     # Create 3-column grid
     cols = st.columns(3, gap="large")
-    
+
     for idx, category in enumerate(categories):
         with cols[idx % 3]:
             # Store selected category in session state if clicked
             category_key = f"category_{category['id']}"
-            
+
             st.markdown(
                 f"""
                 <div class="category-card" style="--card-accent: {category['color']}; --card-accent-light: {category['color_light']};">
@@ -329,18 +356,18 @@ def _render_category_grid(theme: dict) -> None:
                     <div class="category-count">{category['subtitle']}</div>
                 </div>
                 """,
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
-            
+
             # Clickable button (invisible but functional)
             if st.button(
                 f"عرض {category['title']}",
                 key=category_key,
                 use_container_width=True,
                 type="secondary",
-                help=f"عرض جميع ملفات {category['title']}"
+                help=f"عرض جميع ملفات {category['title']}",
             ):
-                st.session_state.selected_category = category['id']
+                st.session_state.selected_category = category["id"]
                 st.toast(f"📂 عرض فئة: {category['title']}", icon="✨")
 
 
@@ -357,22 +384,24 @@ def _upload_box(theme: dict) -> None:
         """,
         unsafe_allow_html=True,
     )
-    
+
     file = st.file_uploader(
         "رفع مستند طبي",
         type=["pdf", "jpg", "jpeg", "png"],
         label_visibility="collapsed",
         key="vault_uploader",
-        help="اختر ملف طبي للرفع"
+        help="اختر ملف طبي للرفع",
     )
-    
+
     if file:
         # Determine category and icon based on filename
         name_lower = file.name.lower()
         if "test" in name_lower or "lab" in name_lower or "تحليل" in name_lower:
             icon = "🧪"
             category = "tests"
-        elif "prescription" in name_lower or "med" in name_lower or "وصفة" in name_lower:
+        elif (
+            "prescription" in name_lower or "med" in name_lower or "وصفة" in name_lower
+        ):
             icon = "💊"
             category = "prescriptions"
         elif "vaccine" in name_lower or "vac" in name_lower or "تطعيم" in name_lower:
@@ -387,18 +416,22 @@ def _upload_box(theme: dict) -> None:
         else:
             icon = "📄"
             category = "other"
-        
+
         # Save to session state
         file_info = {
             "name": file.name,
             "type": file.type,
             "category": category,
-            "size": f"{file.size / 1024:.1f}KB" if file.size < 1024*1024 else f"{file.size / (1024*1024):.1f}MB",
+            "size": (
+                f"{file.size / 1024:.1f}KB"
+                if file.size < 1024 * 1024
+                else f"{file.size / (1024*1024):.1f}MB"
+            ),
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "icon": icon,
-            "data": file.getvalue()
+            "data": file.getvalue(),
         }
-        
+
         # Check if not duplicate
         if not any(f["name"] == file.name for f in st.session_state.medical_history):
             st.session_state.medical_history.append(file_info)
@@ -409,50 +442,66 @@ def _upload_box(theme: dict) -> None:
             st.warning(f"الملف **{file.name}** موجود بالفعل في المخزن.")
 
 
-def _files_list(theme: dict) -> None:
+def _files_list() -> None:
     """Render documents list with modern card design"""
     st.markdown(f"### 📋 {t('your_documents')}")
-    
+
     if not st.session_state.medical_history:
-        st.info(t('no_documents'))
+        st.info(t("no_documents"))
         return
-    
+
     # Filter by selected category if any
     selected_category = st.session_state.get("selected_category", None)
-    
+
     if selected_category:
-        filtered_docs = [doc for doc in st.session_state.medical_history if doc.get("category") == selected_category]
-        st.markdown(f"**{t('category')}: {selected_category.upper()}** ({len(filtered_docs)} files)")
-        
+        filtered_docs = [
+            doc
+            for doc in st.session_state.medical_history
+            if doc.get("category") == selected_category
+        ]
+        st.markdown(
+            f"**{t('category')}: {selected_category.upper()}** ({len(filtered_docs)} files)"
+        )
+
         if st.button(f"🔙 {t('view_all')}", type="secondary"):
             st.session_state.selected_category = None
             st.rerun()
     else:
         filtered_docs = st.session_state.medical_history
         st.markdown(f"**{len(filtered_docs)} documents**")
-    
-    # Display documents using ui_kit cards
+
+    # Display documents using clean native Streamlit
     for idx, doc in enumerate(filtered_docs):
         col1, col2, col3 = st.columns([5, 1, 1])
-        
+
         with col1:
-            # Clean display without raw HTML showing
-            doc_title = f"{doc.get('icon', '📄')} {doc.get('name', 'Unknown')}"
-            doc_meta = f"{doc.get('size', 'N/A')} • {doc.get('date', 'N/A')}"
-            
-            st.markdown(f"""
-            <div style="padding: 12px; background: var(--card-bg, #f8f9fa); border-radius: 8px; border: 1px solid #e0e0e0;">
-                <div style="font-weight: 600; margin-bottom: 4px;">{doc_title}</div>
-                <div style="font-size: 0.85em; color: #666;">{doc_meta}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
+            # Use ui_kit card for clean display
+            doc_icon = doc.get("icon", "📄")
+            doc_name = doc.get("name", "Unknown")
+            doc_size = doc.get("size", "N/A")
+            doc_date = doc.get("date", "N/A")
+
+            st.markdown(
+                card(
+                    title=f"{doc_icon} {doc_name}",
+                    content=f"{doc_size} • {doc_date}",
+                    style="compact",
+                ),
+                unsafe_allow_html=True,
+            )
+
         with col2:
             if st.button("👁️", key=f"view_{idx}", use_container_width=True, help="View"):
                 st.info(f"Viewing: {doc.get('name', 'Unknown')}")
-        
+
         with col3:
-            if st.button("🗑️", key=f"del_{idx}", use_container_width=True, type="secondary", help="Delete"):
+            if st.button(
+                "🗑️",
+                key=f"del_{idx}",
+                use_container_width=True,
+                type="secondary",
+                help="Delete",
+            ):
                 # Find the actual index in the original list
                 actual_idx = st.session_state.medical_history.index(doc)
                 st.session_state.medical_history.pop(actual_idx)
