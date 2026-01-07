@@ -829,7 +829,7 @@ def _render_camera_inner() -> None:
             <div class="side-control" onclick="alert('Switch Camera')" title="Switch">🔄</div>
         </div>
         <div class="scan-helper">
-            📸 {messages.get('camera_guide', 'وجّه الكاميرا نحو المنتج للمسح التلقائي')}
+            📸 {messages.get('camera_guide', 'Point camera at product')}
         </div>
         </div>
         """

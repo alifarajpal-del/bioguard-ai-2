@@ -27,7 +27,7 @@ def _render_vault_inner() -> None:
     theme = get_current_theme()
 
     # Back to home button
-    if st.button("🔙 رجوع إلى الرئيسية", key="vault_back_home"):
+    if st.button(f"🔙 {t('back_to_home')}", key="vault_back_home"):
         log_user_action(logger, "navigate_home", {})
         st.session_state.current_page = "home"
         st.rerun()
@@ -59,7 +59,7 @@ def _render_vault_inner() -> None:
             margin: 8px 0 0 0;
             color: #64748B;
             font-size: 14px;
-        ">Secure Medical Document Archive</p>
+        ">{t('vault_subtitle')}</p>
     </div>
     """.format(t('vault_title')), unsafe_allow_html=True)
 
@@ -209,13 +209,13 @@ def _inject_vault_css(theme: dict) -> None:
 
 def _render_category_grid(theme: dict) -> None:
     """Render medical document categories in grid layout"""
-    st.markdown("""
+    st.markdown(f"""
     <h3 style="
         font-size: 18px;
         font-weight: 600;
         color: #0F172A;
         margin-bottom: 16px;
-    ">📂 فئات الملفات الطبية</h3>
+    ">📂 {t('medical_categories')}</h3>
     """, unsafe_allow_html=True)
 
     # Calculate counts first
@@ -252,12 +252,12 @@ def _render_category_grid(theme: dict) -> None:
         count_tests + count_reports + count_prescriptions + count_vaccines + count_xrays
     )
 
-    # Define categories with icons and colors
+    # Define categories with icons and colors - use i18n for titles
     categories = [
         {
             "id": "tests",
-            "title": "التحاليل",
-            "subtitle": "Lab Tests",
+            "title": t("tests"),
+            "subtitle": t("lab_reports"),
             "icon": "🧪",
             "color": "#3b82f6",
             "color_light": "#60a5fa",
@@ -265,8 +265,8 @@ def _render_category_grid(theme: dict) -> None:
         },
         {
             "id": "reports",
-            "title": "التقارير",
-            "subtitle": "Medical Reports",
+            "title": t("reports"),
+            "subtitle": t("lab_reports"),
             "icon": "📋",
             "color": "#8b5cf6",
             "color_light": "#a78bfa",
@@ -274,8 +274,8 @@ def _render_category_grid(theme: dict) -> None:
         },
         {
             "id": "prescriptions",
-            "title": "الوصفات",
-            "subtitle": "Prescriptions",
+            "title": t("prescriptions"),
+            "subtitle": t("prescriptions"),
             "icon": "💊",
             "color": "#ec4899",
             "color_light": "#f472b6",
@@ -283,8 +283,8 @@ def _render_category_grid(theme: dict) -> None:
         },
         {
             "id": "vaccines",
-            "title": "التطعيمات",
-            "subtitle": "Vaccinations",
+            "title": t("vaccinations"),
+            "subtitle": t("vaccinations"),
             "icon": "💉",
             "color": "#10b981",
             "color_light": "#34d399",
@@ -292,8 +292,8 @@ def _render_category_grid(theme: dict) -> None:
         },
         {
             "id": "xrays",
-            "title": "الأشعة",
-            "subtitle": "X-Rays & Scans",
+            "title": t("xrays"),
+            "subtitle": t("xrays"),
             "icon": "🏥",
             "color": "#f59e0b",
             "color_light": "#fbbf24",
@@ -301,8 +301,8 @@ def _render_category_grid(theme: dict) -> None:
         },
         {
             "id": "other",
-            "title": "أخرى",
-            "subtitle": "Other Documents",
+            "title": t("other"),
+            "subtitle": t("other"),
             "icon": "📄",
             "color": "#64748b",
             "color_light": "#94a3b8",
@@ -330,12 +330,12 @@ def _render_category_grid(theme: dict) -> None:
                 help=category['subtitle'],
             ):
                 st.session_state.selected_category = category["id"]
-                st.toast(f"📂 عرض فئة: {category['title']}", icon="✨")
+                st.toast(f"📂 {t('category')}: {category['title']}", icon="✨")
 
 
 def _upload_box(theme: dict) -> None:
     """Render professional upload box"""
-    st.markdown("""
+    st.markdown(f"""
     <div style="
         background: #F8FAFC;
         border: 2px dashed #CBD5E1;
@@ -345,17 +345,17 @@ def _upload_box(theme: dict) -> None:
         margin: 20px 0;
     ">
         <div style="font-size: 48px; margin-bottom: 12px;">🏥</div>
-        <h3 style="margin: 0 0 8px 0; color: #0F172A; font-size: 18px; font-weight: 600;">اسحب الملفات هنا</h3>
-        <p style="margin: 0; color: #64748B; font-size: 14px;">PDF, JPG, PNG • أشعة • تحاليل • وصفات • حتى 10MB</p>
+        <h3 style="margin: 0 0 8px 0; color: #0F172A; font-size: 18px; font-weight: 600;">{t('drag_files_here')}</h3>
+        <p style="margin: 0; color: #64748B; font-size: 14px;">{t('file_types_hint')}</p>
     </div>
     """, unsafe_allow_html=True)
 
     file = st.file_uploader(
-        "رفع مستند طبي",
+        t("upload_medical"),
         type=["pdf", "jpg", "jpeg", "png"],
         label_visibility="collapsed",
         key="vault_uploader",
-        help="اختر ملف طبي للرفع",
+        help=t("choose_file_hint"),
     )
 
     if file:
@@ -400,22 +400,22 @@ def _upload_box(theme: dict) -> None:
         # Check if not duplicate
         if not any(f["name"] == file.name for f in st.session_state.medical_history):
             st.session_state.medical_history.append(file_info)
-            st.toast("✅ تمت الإضافة إلى ملفك الطبي!", icon="🏥")
-            st.success(f"تم الرفع بنجاح: **{file.name}**")
+            st.toast(f"✅ {t('added_success')}", icon="🏥")
+            st.success(f"{t('upload_success')}: **{file.name}**")
             st.rerun()  # Refresh to update category counts
         else:
-            st.warning(f"الملف **{file.name}** موجود بالفعل في المخزن.")
+            st.warning(f"**{file.name}** {t('file_exists')}.")
 
 
 def _files_list() -> None:
     """Render documents list with clean card design"""
-    st.markdown("""
+    st.markdown(f"""
     <h3 style="
         font-size: 18px;
         font-weight: 600;
         color: #0F172A;
         margin: 24px 0 16px 0;
-    ">📋 مستنداتك</h3>
+    ">📋 {t('your_documents')}</h3>
     """, unsafe_allow_html=True)
 
     if not st.session_state.medical_history:
@@ -477,5 +477,5 @@ def _files_list() -> None:
                 # Find the actual index in the original list
                 actual_idx = st.session_state.medical_history.index(doc)
                 st.session_state.medical_history.pop(actual_idx)
-                st.toast("🗑️ تم حذف المستند", icon="✅")
+                st.toast(f"🗑️ {t('deleted_doc')}", icon="✅")
                 st.rerun()

@@ -11,18 +11,34 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
+import os
+
 try:
     from streamlit_webrtc import RTCConfiguration, WebRtcMode, webrtc_streamer
 
     WEBRTC_AVAILABLE = True
 except ImportError:
     WEBRTC_AVAILABLE = False
-    st.warning("⚠️ streamlit-webrtc not installed. Using upload fallback only.")
+
+
+def _is_streamlit_cloud() -> bool:
+    """Detect if running on Streamlit Cloud."""
+    # Check common Streamlit Cloud indicators
+    if os.path.exists("/mount/src"):
+        return True
+    if os.environ.get("STREAMLIT_RUNTIME"):
+        return True
+    return False
+
+
+# Disable WebRTC on Cloud by default (unstable)
+WEBRTC_ENABLED = WEBRTC_AVAILABLE and not _is_streamlit_cloud()
 
 from config.settings import SUPPORTED_LANGUAGES
 from database.db_manager import get_db_manager
 from services.engine import analyze_image_sync
 from services.video_processor import BioGuardVideoProcessor, get_video_processor_factory
+from utils.i18n import get_lang, t
 
 
 def render_camera_view() -> None:
@@ -42,8 +58,8 @@ def render_camera_view() -> None:
     # Main layout
     st.title(messages["title"])
 
-    if not WEBRTC_AVAILABLE:
-        st.warning(messages["webrtc_unavailable"])
+    if not WEBRTC_ENABLED:
+        st.info(messages["webrtc_unavailable"])
         _render_upload_interface(messages)
         return
 
@@ -272,6 +288,12 @@ def _handle_capture(
 
         pil_image = Image.fromarray(frame_rgb)
 
+        # Ensure RGB mode for JPEG (handle RGBA/P/LA modes)
+        if pil_image.mode in ("RGBA", "LA") or (pil_image.mode == "P" and "transparency" in pil_image.info):
+            pil_image = pil_image.convert("RGBA").convert("RGB")
+        elif pil_image.mode != "RGB":
+            pil_image = pil_image.convert("RGB")
+
         # Convert to bytes
         img_byte_arr = BytesIO()
         pil_image.save(img_byte_arr, format="JPEG")
@@ -371,7 +393,7 @@ def _display_barcode_info(result: Dict[str, Any], messages: Dict[str, str]) -> N
 def _display_analysis_result(
     analysis: Dict[str, Any], image: Image.Image, messages: Dict[str, str]
 ) -> None:
-    """Display comprehensive analysis result."""
+    """Display comprehensive analysis result with full nutrition cards."""
     st.markdown('<div class="result-container">', unsafe_allow_html=True)
 
     st.success(f"✅ {messages['analysis_complete']}")
@@ -382,25 +404,77 @@ def _display_analysis_result(
         st.image(image, caption=messages["captured_image"], width="stretch")
 
     with col2:
-        # Health score
+        # Health score with visual indicator
         health_score = analysis.get("health_score", "N/A")
-        st.metric(messages["health_score"], health_score)
+        verdict = analysis.get("verdict", "UNKNOWN")
+        
+        # Color code the verdict
+        verdict_color = {"SAFE": "🟢", "WARNING": "🟡", "DANGER": "🔴"}.get(verdict, "⚪")
+        st.metric(messages["health_score"], f"{health_score} {verdict_color}")
 
-        # Key insights
-        if "summary" in analysis:
-            st.markdown(f"**{messages['summary']}:**")
+        # Product name if available
+        product = analysis.get("product", "")
+        if product and product not in ["Gemini Vision", "OpenAI Vision", "Mock Snack"]:
+            st.markdown(f"**{t('product_name')}:** {product}")
+
+    # Summary card
+    if "summary" in analysis:
+        with st.expander(f"📋 {t('analysis_complete')}", expanded=True):
             st.info(analysis["summary"])
 
-        # Ingredients
-        if "ingredients" in analysis:
-            with st.expander(messages["ingredients"]):
-                st.write(analysis["ingredients"])
+    # Nutrition Facts card
+    nutrients = analysis.get("nutrients", {})
+    if nutrients:
+        with st.expander(f"🍎 {t('nutrition_facts')}", expanded=True):
+            nut_cols = st.columns(3)
+            nutrient_display = [
+                ("calories", "🔥", "kcal"),
+                ("carbohydrates", "🍞", "g"),
+                ("fat", "🧈", "g"),
+                ("protein", "🥩", "g"),
+                ("sugars", "🍬", "g"),
+                ("sodium", "🧂", "mg"),
+            ]
+            for i, (key, icon, unit) in enumerate(nutrient_display):
+                val = nutrients.get(key, "N/A")
+                if val != "N/A":
+                    with nut_cols[i % 3]:
+                        st.metric(f"{icon} {key.title()}", f"{val}{unit}")
 
-        # Recommendations
-        if "recommendations" in analysis:
-            with st.expander(messages["recommendations"]):
-                for rec in analysis["recommendations"]:
+    # Why this score
+    why_score = analysis.get("why_score", "")
+    if why_score:
+        with st.expander(f"❓ {t('why_score')}", expanded=False):
+            st.write(why_score)
+    elif analysis.get("warnings"):
+        # Generate why from warnings
+        with st.expander(f"❓ {t('why_score')}", expanded=False):
+            warnings_list = analysis.get("warnings", [])
+            if isinstance(warnings_list, list) and warnings_list:
+                st.write("Score based on: " + ", ".join(str(w)[:50] for w in warnings_list[:3]))
+
+    # Warnings
+    warnings = analysis.get("warnings", [])
+    if warnings and isinstance(warnings, list):
+        with st.expander(f"⚠️ {t('warnings')}", expanded=True):
+            for w in warnings:
+                if isinstance(w, str) and w.strip():
+                    st.warning(w[:200])
+
+    # Ingredients
+    if "ingredients" in analysis:
+        with st.expander(f"📜 {messages['ingredients']}", expanded=False):
+            st.write(analysis["ingredients"])
+
+    # Recommendations
+    if "recommendations" in analysis:
+        with st.expander(f"💡 {t('recommendations')}", expanded=False):
+            recs = analysis["recommendations"]
+            if isinstance(recs, list):
+                for rec in recs:
                     st.markdown(f"• {rec}")
+            else:
+                st.write(recs)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -449,6 +523,12 @@ def _render_upload_interface(messages: Dict[str, str]) -> None:
         ):
             with st.spinner(messages["analyzing"]):
                 try:
+                    # Ensure RGB mode for JPEG (handle RGBA/P/LA modes)
+                    if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                        image = image.convert("RGBA").convert("RGB")
+                    elif image.mode != "RGB":
+                        image = image.convert("RGB")
+
                     # Convert to bytes
                     img_byte_arr = BytesIO()
                     image.save(img_byte_arr, format="JPEG")

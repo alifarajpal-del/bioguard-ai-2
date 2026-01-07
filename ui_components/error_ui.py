@@ -6,6 +6,7 @@ import logging
 from typing import Callable, Optional
 import streamlit as st
 from utils.logging_setup import get_logger
+from utils.i18n import t
 
 logger = get_logger(__name__)
 
@@ -28,7 +29,7 @@ def safe_render(fn: Callable, context: str = "", show_details: bool = False) -> 
         )
         
         # Show user-friendly error card
-        st.markdown("""
+        st.markdown(f"""
         <div style="
             padding: 20px;
             border-radius: 12px;
@@ -37,10 +38,10 @@ def safe_render(fn: Callable, context: str = "", show_details: bool = False) -> 
             margin: 16px 0;
         ">
             <div style="font-size: 16px; font-weight: 600; color: #ef4444; margin-bottom: 8px;">
-                ⚠️ حدث خطأ غير متوقع
+                ⚠️ {t('unexpected_error')}
             </div>
             <div style="font-size: 14px; color: #6b7280; line-height: 1.6;">
-                نعتذر عن هذا الإزعاج. يمكنك المحاولة مرة أخرى أو الرجوع إلى الصفحة الرئيسية.
+                {t('error_apology')}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -54,18 +55,18 @@ def safe_render(fn: Callable, context: str = "", show_details: bool = False) -> 
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("🔄 إعادة المحاولة", key=f"retry_{context}", use_container_width=True):
+            if st.button(f"🔄 {t('retry')}", key=f"retry_{context}", use_container_width=True):
                 st.rerun()
         
         with col2:
-            if st.button("🏠 الصفحة الرئيسية", key=f"home_{context}", use_container_width=True):
+            if st.button(f"🏠 {t('go_home')}", key=f"home_{context}", use_container_width=True):
                 from ui_components.router import go_to
                 go_to("dashboard")
                 st.rerun()
         
         with col3:
-            if st.button("📝 تقرير المشكلة", key=f"report_{context}", use_container_width=True):
-                st.info("يرجى التواصل مع الدعم الفني عبر البريد الإلكتروني.")
+            if st.button(f"📝 {t('report_issue')}", key=f"report_{context}", use_container_width=True):
+                st.info(t('contact_support'))
 
 
 def show_api_error(
