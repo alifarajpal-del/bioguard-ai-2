@@ -202,12 +202,11 @@ def _modern_stats_cards(theme: dict) -> None:
     
     for col, stat in zip(cols, stats):
         with col:
-            st.markdown(metric(
+            metric(
                 label=stat['label'],
                 value=stat['value'],
                 delta=stat.get('delta'),
-                icon=stat['icon']
-            ), unsafe_allow_html=True)
+            )
 
 
 def _health_score_trend(theme: dict) -> None:

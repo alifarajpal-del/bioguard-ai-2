@@ -946,6 +946,9 @@ def _render_camera_inner() -> None:
                     # Render full analysis with improved cards
                     _render_full_analysis(result)
 
+                    # Score used for alternative suggestions
+                    score = result.get("health_score", 50)
+
                     # Ingredients
                     render_ingredients_section(result)
 
