@@ -855,14 +855,14 @@ def _render_camera_inner() -> None:
                 return
 
             # Show step progress
-            step_progress(["كشف", "تحليل", "نتائج"], active_index=1)
+            step_progress([t("step_detect"), t("step_analyze"), t("step_results")], active_index=1)
 
             # Show pre-confidence for vision
             pre_conf = get_pre_confidence("vision")
             st.markdown(
                 f"""
             <div style="padding: 12px; background: rgba(59,130,246,0.1); border-radius: 8px; margin: 12px 0;">
-                {badge("جاري التحليل...", "info", "🔍")}
+                {badge(t("status_analyzing"), "info", "🔍")}
                 {confidence_badge(pre_conf, "الثقة الأولية")}
             </div>
             """,
@@ -985,7 +985,7 @@ def _render_camera_inner() -> None:
                 st.session_state.scan_status = "complete"
 
                 # Show step progress complete
-                step_progress(["كشف", "تحليل", "نتائج"], active_index=2)
+                step_progress([t("step_detect"), t("step_analyze"), t("step_results")], active_index=2)
 
                 # Display result
                 col1, col2 = st.columns([2, 1])
@@ -1241,108 +1241,45 @@ def _get_ui_messages(language: str = "en") -> Dict[str, str]:
         language: Language code (ar, en, fr)
 
     Returns:
-        Dictionary of UI messages
+        Dictionary of UI messages mapped to i18n keys
     """
+    # Map UI message keys to i18n keys
+    from utils.i18n import t, get_lang
+    
+    lang = get_lang()
     messages = {
-        "ar": {
-            "live": "مباشر",
-            "searching": "جارٍ البحث عن منتج...",
-            "detected": "منتج مُكتشف ✓",
-            "analyzing": "جارٍ التحليل...",
-            "complete": "اكتمل التحليل ✓",
-            "flash": "فلاش",
-            "guides": "إرشادات",
-            "flash_tip": "استخدم الفلاش في الإضاءة المنخفضة",
-            "guide_tip": "وجّه الكاميرا نحو ملصق المنتج للحصول على أفضل النتائج",
-            "helper_text": "وجّه الكاميرا نحو المنتج ليتم التحليل مباشرة",
-            "analysis_complete": "اكتمل التحليل",
-            "ingredients": "المكونات",
-            "scanned_image": "الصورة الممسوحة",
-            "alternatives": "بدائل صحية",
-            "alternatives_message": "نوصي بالبحث عن منتجات ذات درجة صحية أعلى من نفس الفئة",
-            "found_alternatives": "وجدنا",
-            "healthier_options": "خيارات أصح",
-            "manual_capture": "التقاط يدوي",
-            "product_detected": "تم اكتشاف منتج",
-            "no_detection": "لم يتم اكتشاف منتج. حاول توجيه الكاميرا بشكل أفضل",
-            "camera_not_ready": "الكاميرا غير جاهزة",
-            "barcode_detected": "باركود مكتشف",
-            "product_name": "اسم المنتج",
-            "brand": "العلامة التجارية",
-            "nutrition_grade": "الدرجة الغذائية",
-            "history": "السجل",
-            "allow_camera": "اسمح للمتصفح بالوصول إلى الكاميرا ليبدأ المسح تلقائيًا",
-            "how_to_scan": "كيفية المسح",
-            "scan_instructions": "1) اسمح بالوصول للكاميرا  •  2) وجّه نحو المنتج  •  3) انتظر التحليل التلقائي أو اضغط زر الالتقاط",
-            "nutrition_details": "الحقائق الغذائية",
-        },
-        "en": {
-            "live": "LIVE",
-            "searching": "Searching for product...",
-            "detected": "Product Detected ✓",
-            "analyzing": "Analyzing...",
-            "complete": "Analysis Complete ✓",
-            "flash": "Flash",
-            "guides": "Guides",
-            "flash_tip": "Use flash in low light conditions",
-            "guide_tip": "Point camera at product label for best results",
-            "helper_text": "Point camera at product for automatic analysis",
-            "analysis_complete": "Analysis Complete",
-            "ingredients": "Ingredients",
-            "scanned_image": "Scanned Image",
-            "alternatives": "Healthy Alternatives",
-            "alternatives_message": "We recommend looking for products with higher health scores in the same category",
-            "found_alternatives": "Found",
-            "healthier_options": "healthier options",
-            "manual_capture": "Manual Capture",
-            "product_detected": "Product detected",
-            "no_detection": "No product detected. Try repositioning camera",
-            "camera_not_ready": "Camera not ready",
-            "barcode_detected": "Barcode Detected",
-            "product_name": "Product Name",
-            "brand": "Brand",
-            "nutrition_grade": "Nutrition Grade",
-            "history": "History",
-            "allow_camera": "Allow browser to access camera to start scanning",
-            "how_to_scan": "How to Scan",
-            "scan_instructions": "1) Allow camera access  •  2) Point at product  •  3) Wait for auto-analysis or tap capture",
-            "nutrition_details": "Nutrition facts",
-        },
-        "fr": {
-            "live": "EN DIRECT",
-            "searching": "Recherche de produit...",
-            "detected": "Produit Détecté ✓",
-            "analyzing": "Analyse en cours...",
-            "complete": "Analyse Terminée ✓",
-            "flash": "Flash",
-            "guides": "Guides",
-            "flash_tip": "Utilisez le flash en cas de faible luminosité",
-            "guide_tip": "Pointez la caméra sur l'étiquette du produit pour de meilleurs résultats",
-            "helper_text": "Pointez la caméra vers le produit pour une analyse automatique",
-            "analysis_complete": "Analyse Terminée",
-            "ingredients": "Ingrédients",
-            "scanned_image": "Image Scannée",
-            "alternatives": "Alternatives Saines",
-            "alternatives_message": "Nous recommandons de chercher des produits avec de meilleurs scores santé dans la même catégorie",
-            "found_alternatives": "Trouvé",
-            "healthier_options": "options plus saines",
-            "manual_capture": "Capture Manuelle",
-            "product_detected": "Produit détecté",
-            "no_detection": "Aucun produit détecté. Essayez de repositionner la caméra",
-            "camera_not_ready": "Caméra pas prête",
-            "barcode_detected": "Code-barres Détecté",
-            "product_name": "Nom du Produit",
-            "brand": "Marque",
-            "nutrition_grade": "Note Nutritionnelle",
-            "history": "Historique",
-            "allow_camera": "Autorisez le navigateur à accéder à la caméra pour commencer",
-            "how_to_scan": "Comment Scanner",
-            "scan_instructions": "1) Autorisez l'accès caméra  •  2) Pointez vers le produit  •  3) Attendez l'analyse auto ou appuyez",
-            "nutrition_details": "Infos nutritionnelles",
-        },
+        "live": t("scan_title"),
+        "searching": t("analyzing"),
+        "detected": t("product_detected"),
+        "analyzing": t("analyzing"),
+        "complete": t("analysis_complete"),
+        "flash": "Flash",
+        "guides": "Guides",
+        "flash_tip": "Use flash in low light conditions",
+        "guide_tip": t("guide_tip"),
+        "helper_text": t("helper_text"),
+        "analysis_complete": t("analysis_complete"),
+        "ingredients": t("ingredients"),
+        "scanned_image": t("scanned_image"),
+        "alternatives": t("alternatives"),
+        "alternatives_message": t("alternatives_message"),
+        "found_alternatives": t("found_alternatives"),
+        "healthier_options": t("healthier_options"),
+        "manual_capture": t("manual_capture"),
+        "product_detected": t("product_detected"),
+        "no_detection": t("no_detection"),
+        "camera_not_ready": t("camera_not_ready"),
+        "barcode_detected": t("barcode_detected"),
+        "product_name": t("product_name"),
+        "brand": t("brand"),
+        "nutrition_grade": t("nutrition_grade"),
+        "history": "History",
+        "allow_camera": "Please allow camera access to enable automatic scanning",
+        "how_to_scan": t("how_to_scan"),
+        "scan_instructions": t("scan_instructions"),
+        "nutrition_details": t("nutrition_facts"),
     }
-
-    return messages.get(language, messages["en"])
+    return messages
 
 
 def _render_upload_fallback() -> None:

@@ -90,30 +90,9 @@ def init_session_state() -> None:
 # ============== Authentication UI ==============
 
 def render_auth_screen() -> None:
-    """Render OAuth authentication screen with Google/Apple Sign-In."""
-    # Check if this is an OAuth callback
-    query_params = st.query_params
-    
-    # Handle Google OAuth callback
-    if "code" in query_params and "state" in query_params:
-        # Determine provider from URL path or session state
-        provider = st.session_state.get("oauth_provider", "google")
-        
-        code = query_params["code"]
-        state = query_params["state"]
-        
-        if handle_oauth_callback(provider, code, state):
-            # Clear query params and redirect to dashboard
-            st.query_params.clear()
-            st.session_state.current_page = "dashboard"
-            st.success("✅ تم تسجيل الدخول بنجاح!")
-            st.rerun()
-        else:
-            st.query_params.clear()
-            st.rerun()
-    
-    # Render OAuth login screen
-    render_oauth_login()
+    """Render login/register authentication screen."""
+    from ui_components.auth_ui import render_login_register
+    render_login_register()
 
 
 # ============== Settings Page ==============
