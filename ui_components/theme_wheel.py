@@ -5,44 +5,60 @@ import streamlit as st
 import random
 
 THEMES: Dict[str, Dict[str, str]] = {
-    "pastel": {
-        "name": "Pastel",
-        "background": "#F5F7FB",
+    "medical": {
+        "name": "Medical Pro",
+        "background": "#F8FAFC",
         "card_bg": "#FFFFFF",
-        "primary": "#8B5CF6",
-        "secondary": "#60A5FA",
-        "accent": "#22C55E",
-        "text": "#1E293B",
-        "emoji": "🎨",
+        "primary": "#3B82F6",      # Professional blue
+        "secondary": "#E0F2FE",    # Soft blue
+        "accent": "#10B981",       # Trust green
+        "success": "#10B981",      # Green
+        "warning": "#F59E0B",      # Amber
+        "danger": "#EF4444",       # Red
+        "text": "#0F172A",
+        "text_secondary": "#64748B",
+        "emoji": "🩺",
     },
     "dark": {
         "name": "Dark Mode",
         "background": "#0F172A",
         "card_bg": "#1E293B",
-        "primary": "#2563EB",
-        "secondary": "#4F46E5",
-        "accent": "#22C55E",
-        "text": "#E2E8F0",
+        "primary": "#60A5FA",      # Softer blue for dark
+        "secondary": "#1E3A5F",
+        "accent": "#34D399",       # Bright green for contrast
+        "success": "#34D399",
+        "warning": "#FBBF24",
+        "danger": "#F87171",
+        "text": "#F1F5F9",
+        "text_secondary": "#94A3B8",
         "emoji": "🌙",
     },
     "ocean": {
         "name": "Deep Ocean",
-        "primary": "#0891b2",        # Cyan
-        "secondary": "#cffafe",      # Light cyan
-        "background": "#ecfeff",     # Lightest cyan
-        "text": "#164e63",           # Dark cyan (WCAG AAA)
-        "accent": "#06b6d4",         # Cyan accent
-        "card_bg": "#ffffff",
+        "primary": "#0891b2",
+        "secondary": "#CFFAFE",
+        "background": "#F0FDFA",
+        "text": "#134E4A",
+        "text_secondary": "#6B7280",
+        "accent": "#06B6D4",
+        "success": "#14B8A6",
+        "warning": "#F59E0B",
+        "danger": "#EF4444",
+        "card_bg": "#FFFFFF",
         "emoji": "🌊",
     },
     "sunset": {
         "name": "Peach Sunset",
-        "primary": "#f97316",        # Orange
-        "secondary": "#fed7aa",      # Light orange
-        "background": "#fff7ed",     # Lightest orange
-        "text": "#7c2d12",           # Dark orange (WCAG AAA)
-        "accent": "#fb923c",         # Orange accent
-        "card_bg": "#ffffff",
+        "primary": "#F97316",
+        "secondary": "#FED7AA",
+        "background": "#FFF7ED",
+        "text": "#7C2D12",
+        "text_secondary": "#92400E",
+        "accent": "#FB923C",
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "danger": "#EF4444",
+        "card_bg": "#FFFFFF",
         "emoji": "🍑",
     },
 }
@@ -77,118 +93,144 @@ def apply_active_theme() -> None:
 
 
 def _inject_theme_css(theme: Dict[str, str]) -> None:
-    """Inject modern pastel theme CSS with high contrast and decorative elements"""
+    """Inject modern medical-grade theme CSS with professional color system"""
     css = f"""
     <style>
         :root {{
-            /* legacy variable names */
+            /* Core color system */
+            --primary: {theme['primary']};
+            --secondary: {theme['secondary']};
+            --accent: {theme['accent']};
+            --success: {theme.get('success', theme['accent'])};
+            --warning: {theme.get('warning', '#F59E0B')};
+            --danger: {theme.get('danger', '#EF4444')};
+            
+            /* Backgrounds */
+            --bg: {theme['background']};
+            --card-bg: {theme['card_bg']};
+            
+            /* Text colors */
+            --text: {theme['text']};
+            --text-secondary: {theme.get('text_secondary', theme['text'])};
+            
+            /* Legacy aliases for compatibility */
             --primary-color: {theme['primary']};
             --background-color: {theme['background']};
             --text-color: {theme['text']};
             --secondary-background-color: {theme['secondary']};
             --accent-color: {theme['accent']};
-            --card-bg: {theme['card_bg']};
-            /* unified variable names used by components */
-            --primary: {theme['primary']};
-            --secondary: {theme['secondary']};
-            --accent: {theme['accent']};
-            --text: {theme['text']};
-            --bg: {theme['background']};
-            --card-bg: {theme['card_bg']};
         }}
         
-        /* Main App Background with Wavy Pattern */
+        /* Main App Background - Clean and Professional */
         .stApp {{
-            background: 
-                linear-gradient(135deg, {theme['background']} 0%, {theme['secondary']} 100%),
-                repeating-linear-gradient(
-                    45deg,
-                    transparent,
-                    transparent 35px,
-                    {theme['secondary']}20 35px,
-                    {theme['secondary']}20 70px
-                );
+            background: {theme['background']};
             color: {theme['text']};
-            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             min-height: 100vh;
         }}
         
-        /* High Contrast Text */
-        .stMarkdown, .stText, p, span, label, .stTextInput > label {{
+        /* Typography Hierarchy */
+        h1 {{
+            font-size: 32px !important;
+            font-weight: 700 !important;
             color: {theme['text']} !important;
-            font-weight: 500;
+            letter-spacing: -0.5px !important;
+            margin-bottom: 16px !important;
         }}
         
-        /* Enhanced Input Fields with Clear Contrast */
+        h2 {{
+            font-size: 24px !important;
+            font-weight: 600 !important;
+            color: {theme['text']} !important;
+            letter-spacing: -0.3px !important;
+            margin-bottom: 12px !important;
+        }}
+        
+        h3 {{
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            color: {theme['text']} !important;
+            margin-bottom: 8px !important;
+        }}
+        
+        /* Text Elements */
+        .stMarkdown, .stText, p, span, label {{
+            color: {theme['text']} !important;
+            line-height: 1.6 !important;
+        }}
+        
+        /* Secondary Text */
+        .stMarkdown small, .text-secondary {{
+            color: {theme.get('text_secondary', theme['text'])} !important;
+            opacity: 0.7;
+        }}
+        
+        /* Input Fields - Clean and Professional */
         .stTextInput > div > div > input,
         .stTextArea > div > div > textarea,
         .stSelectbox > div > div > select {{
             background-color: {theme['card_bg']} !important;
             color: {theme['text']} !important;
             border: 2px solid {theme['secondary']} !important;
-            border-radius: 12px !important;
+            border-radius: 8px !important;
             padding: 12px 16px !important;
-            font-size: 16px !important;
+            font-size: 15px !important;
             font-weight: 500 !important;
-            box-shadow: 0 2px 8px {theme['primary']}10 !important;
-            transition: all 0.3s ease !important;
+            transition: all 0.2s ease !important;
         }}
         
         .stTextInput > div > div > input:focus,
         .stTextArea > div > div > textarea:focus {{
             border-color: {theme['primary']} !important;
-            box-shadow: 0 0 0 3px {theme['primary']}20 !important;
+            box-shadow: 0 0 0 3px {theme['primary']}15 !important;
             outline: none !important;
         }}
         
-        /* Input Labels with High Contrast */
+        /* Input Labels */
         .stTextInput > label, .stTextArea > label, .stSelectbox > label {{
             color: {theme['text']} !important;
-            font-weight: 700 !important;
+            font-weight: 600 !important;
             font-size: 14px !important;
-            margin-bottom: 8px !important;
-            text-transform: uppercase !important;
+            margin-bottom: 6px !important;
+        }}
             letter-spacing: 0.5px !important;
         }}
         
-        /* Modern Rounded Buttons */
+        /* Buttons - Clean and Professional */
         .stButton > button {{
-            background: linear-gradient(135deg, {theme['primary']} 0%, {theme['accent']} 100%) !important;
-            color: #ffffff !important;
+            background: {theme['primary']} !important;
+            color: white !important;
             border: none !important;
-            border-radius: 16px !important;
-            padding: 14px 28px !important;
-            font-weight: 700 !important;
-            font-size: 16px !important;
-            box-shadow: 0 8px 20px {theme['primary']}35 !important;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.5px !important;
+            border-radius: 8px !important;
+            padding: 10px 24px !important;
+            font-weight: 600 !important;
+            font-size: 15px !important;
+            transition: all 0.2s ease !important;
+            box-shadow: 0 2px 8px {theme['primary']}25 !important;
         }}
         
         .stButton > button:hover {{
-            transform: translateY(-2px) !important;
-            box-shadow: 0 12px 28px {theme['primary']}45 !important;
+            background: {theme['primary']}dd !important;
+            box-shadow: 0 4px 12px {theme['primary']}35 !important;
+            transform: translateY(-1px);
         }}
         
         .stButton > button:active {{
-            transform: translateY(0) !important;
-            box-shadow: 0 4px 12px {theme['primary']}35 !important;
+            transform: translateY(0);
         }}
         
-        /* Card Components */
+        /* Card Components - Clean */
         .card {{
             background: {theme['card_bg']};
-            border-radius: 20px;
-            padding: 24px;
-            box-shadow: 0 8px 24px {theme['primary']}15;
-            border: 2px solid {theme['secondary']};
-            transition: all 0.3s ease;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px {theme['primary']}10;
+            border: 1px solid {theme['secondary']};
+            transition: all 0.2s ease;
         }}
         
         .card:hover {{
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px {theme['primary']}25;
+            box-shadow: 0 4px 16px {theme['primary']}15;
         }}
         
         /* Bottom Navigation Bar */

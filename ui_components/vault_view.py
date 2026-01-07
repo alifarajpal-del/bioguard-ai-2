@@ -37,7 +37,31 @@ def _render_vault_inner() -> None:
 
     log_user_action(logger, "vault_view", {})
 
-    st.markdown(f"## 🗄️ {t('vault_title')}")
+    # Page header with icon
+    st.markdown("""
+    <div style="
+        padding: 24px 0;
+        border-bottom: 2px solid #E2E8F0;
+        margin-bottom: 24px;
+    ">
+        <h1 style="
+            margin: 0;
+            color: #0F172A;
+            font-size: 28px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        ">
+            🗄️ <span>{}</span>
+        </h1>
+        <p style="
+            margin: 8px 0 0 0;
+            color: #64748B;
+            font-size: 14px;
+        ">Secure Medical Document Archive</p>
+    </div>
+    """.format(t('vault_title')), unsafe_allow_html=True)
 
     # Initialize medical history in session state
     if "medical_history" not in st.session_state:
@@ -59,22 +83,20 @@ def _render_vault_inner() -> None:
 
 
 def _inject_vault_css(theme: dict) -> None:
-    """Inject modern vault CSS with grid layout"""
+    """Inject clean medical-grade vault CSS"""
     css = f"""
     <style>
-        /* Category Card */
+        /* Category Card - Clean Professional */
         .category-card {{
             background: {theme['card_bg']};
-            border-radius: 20px;
-            padding: 28px 20px;
+            border-radius: 12px;
+            padding: 24px;
             text-align: center;
             border: 2px solid {theme['secondary']};
-            box-shadow: 0 8px 24px {theme['primary']}15;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px {theme['primary']}10;
+            transition: all 0.2s ease;
             cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            min-height: 180px;
+            min-height: 160px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -82,142 +104,84 @@ def _inject_vault_css(theme: dict) -> None:
             gap: 12px;
         }}
         
-        .category-card::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--card-accent), var(--card-accent-light));
-        }}
-        
         .category-card:hover {{
-            transform: translateY(-8px);
-            box-shadow: 0 16px 40px {theme['primary']}25;
+            box-shadow: 0 4px 16px {theme['primary']}20;
             border-color: {theme['primary']};
+            transform: translateY(-2px);
         }}
         
         .category-icon {{
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 36px;
-            margin: 0 auto 12px;
-            background: linear-gradient(135deg, var(--card-accent), var(--card-accent-light));
-            box-shadow: 0 8px 24px var(--card-accent)30;
-            transition: all 0.3s ease;
+            font-size: 32px;
+            margin: 0 auto 8px;
+            background: {theme['secondary']};
+            transition: all 0.2s ease;
         }}
         
         .category-card:hover .category-icon {{
-            transform: scale(1.1) rotate(5deg);
-            box-shadow: 0 12px 32px var(--card-accent)40;
+            background: {theme['primary']}15;
+            transform: scale(1.05);
         }}
         
         .category-title {{
             font-size: 16px;
-            font-weight: 800;
+            font-weight: 700;
             color: {theme['text']};
             margin-bottom: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }}
         
         .category-count {{
             font-size: 13px;
             color: {theme['text']};
-            opacity: 0.7;
-            font-weight: 600;
+            opacity: 0.6;
+            font-weight: 500;
         }}
         
         .category-badge {{
             position: absolute;
             top: 12px;
             right: 12px;
-            background: linear-gradient(135deg, var(--card-accent), var(--card-accent-light));
+            background: {theme['primary']};
             color: white;
-            padding: 4px 12px;
+            padding: 4px 10px;
             border-radius: 12px;
             font-size: 12px;
-            font-weight: 800;
-            box-shadow: 0 4px 12px var(--card-accent)30;
+            font-weight: 700;
         }}
         
-        /* Upload Box */
-        .upload-box {{
-            background: linear-gradient(135deg, {theme['secondary']} 0%, {theme['background']} 100%);
-            border: 3px dashed {theme['primary']};
-            border-radius: 20px;
-            padding: 40px 20px;
-            text-align: center;
-            box-shadow: 0 8px 24px {theme['primary']}15;
-            transition: all 0.3s ease;
-        }}
-        
-        .upload-box:hover {{
-            border-color: {theme['accent']};
-            box-shadow: 0 12px 32px {theme['primary']}25;
-            transform: scale(1.02);
-        }}
-        
-        .upload-icon {{
-            font-size: 64px;
-            margin-bottom: 16px;
-            animation: float 3s ease-in-out infinite;
-        }}
-        
-        @keyframes float {{
-            0%, 100% {{ transform: translateY(0px); }}
-            50% {{ transform: translateY(-10px); }}
-        }}
-        
-        .upload-title {{
-            font-weight: 800;
-            color: {theme['primary']};
-            font-size: 20px;
-            margin-bottom: 8px;
-        }}
-        
-        .upload-subtitle {{
-            color: {theme['text']};
-            font-size: 14px;
-            opacity: 0.8;
-            font-weight: 600;
-        }}
-        
-        /* Document Card */
+        /* Document Card - Clean */
         .doc-card {{
             background: {theme['card_bg']};
-            border: 2px solid {theme['secondary']};
-            border-radius: 16px;
-            padding: 20px;
+            border: 1px solid {theme['secondary']};
+            border-radius: 8px;
+            padding: 16px;
             display: flex;
             align-items: center;
             gap: 16px;
-            box-shadow: 0 4px 16px {theme['primary']}10;
-            transition: all 0.3s ease;
-            margin-bottom: 12px;
+            box-shadow: 0 1px 3px {theme['primary']}08;
+            transition: all 0.2s ease;
+            margin-bottom: 8px;
         }}
         
         .doc-card:hover {{
-            transform: translateX(4px);
-            box-shadow: 0 8px 24px {theme['primary']}20;
+            box-shadow: 0 2px 8px {theme['primary']}15;
             border-color: {theme['primary']};
         }}
         
         .doc-icon-wrapper {{
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, {theme['primary']}, {theme['accent']});
+            width: 56px;
+            height: 56px;
+            border-radius: 8px;
+            background: {theme['secondary']};
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
-            box-shadow: 0 6px 20px {theme['primary']}30;
+            font-size: 28px;
             flex-shrink: 0;
         }}
         
@@ -226,10 +190,10 @@ def _inject_vault_css(theme: dict) -> None:
         }}
         
         .doc-name {{
-            font-weight: 700;
+            font-weight: 600;
             color: {theme['text']};
-            font-size: 16px;
-            margin-bottom: 6px;
+            font-size: 15px;
+            margin-bottom: 4px;
         }}
         
         .doc-meta {{
@@ -245,7 +209,14 @@ def _inject_vault_css(theme: dict) -> None:
 
 def _render_category_grid(theme: dict) -> None:
     """Render medical document categories in grid layout"""
-    st.markdown("### 📂 فئات الملفات الطبية")
+    st.markdown("""
+    <h3 style="
+        font-size: 18px;
+        font-weight: 600;
+        color: #0F172A;
+        margin-bottom: 16px;
+    ">📂 فئات الملفات الطبية</h3>
+    """, unsafe_allow_html=True)
 
     # Calculate counts first
     total = len(st.session_state.medical_history)
@@ -347,43 +318,37 @@ def _render_category_grid(theme: dict) -> None:
             # Store selected category in session state if clicked
             category_key = f"category_{category['id']}"
 
-            st.markdown(
-                f"""
-                <div class="category-card" style="--card-accent: {category['color']}; --card-accent-light: {category['color_light']};">
-                    {f'<div class="category-badge">{category["count"]}</div>' if category["count"] > 0 else ''}
-                    <div class="category-icon">{category['icon']}</div>
-                    <div class="category-title">{category['title']}</div>
-                    <div class="category-count">{category['subtitle']}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Clickable button (invisible but functional)
+            # Use clean Streamlit button with badge
+            badge = f" ({category['count']})" if category['count'] > 0 else ""
+            button_label = f"{category['icon']} {category['title']}{badge}"
+            
             if st.button(
-                f"عرض {category['title']}",
+                button_label,
                 key=category_key,
                 use_container_width=True,
                 type="secondary",
-                help=f"عرض جميع ملفات {category['title']}",
+                help=category['subtitle'],
             ):
                 st.session_state.selected_category = category["id"]
                 st.toast(f"📂 عرض فئة: {category['title']}", icon="✨")
 
 
 def _upload_box(theme: dict) -> None:
-    """Render modern upload box"""
-    st.markdown(
-        f"""
-        <div class="upload-box">
-            <div class="upload-icon">🏥</div>
-            <div class="upload-title">اسحب الملفات هنا</div>
-            <div class="upload-subtitle">PDF, JPG, PNG • أشعة • تحاليل • وصفات</div>
-            <div style="color: {theme['text']}; font-size: 12px; margin-top: 12px; opacity: 0.6;">حتى 10MB لكل ملف</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """Render professional upload box"""
+    st.markdown("""
+    <div style="
+        background: #F8FAFC;
+        border: 2px dashed #CBD5E1;
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        margin: 20px 0;
+    ">
+        <div style="font-size: 48px; margin-bottom: 12px;">🏥</div>
+        <h3 style="margin: 0 0 8px 0; color: #0F172A; font-size: 18px; font-weight: 600;">اسحب الملفات هنا</h3>
+        <p style="margin: 0; color: #64748B; font-size: 14px;">PDF, JPG, PNG • أشعة • تحاليل • وصفات • حتى 10MB</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     file = st.file_uploader(
         "رفع مستند طبي",
@@ -443,8 +408,15 @@ def _upload_box(theme: dict) -> None:
 
 
 def _files_list() -> None:
-    """Render documents list with modern card design"""
-    st.markdown(f"### 📋 {t('your_documents')}")
+    """Render documents list with clean card design"""
+    st.markdown("""
+    <h3 style="
+        font-size: 18px;
+        font-weight: 600;
+        color: #0F172A;
+        margin: 24px 0 16px 0;
+    ">📋 مستنداتك</h3>
+    """, unsafe_allow_html=True)
 
     if not st.session_state.medical_history:
         st.info(t("no_documents"))

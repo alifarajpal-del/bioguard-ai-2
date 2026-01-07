@@ -119,38 +119,40 @@ def _score_breakdown(nutrients: dict) -> list[str]:
 
 
 def _render_full_analysis(result: dict):
-    """Render comprehensive analysis with unified cards."""
-    # Expect result schema; fail gracefully
+    """Render comprehensive analysis with professional medical-grade cards."""
     nutrients = result.get("nutrients") or {}
     warnings = result.get("warnings") or []
     recs = result.get("recommendations") or []
     score = result.get("health_score")
 
-    # Summary
-    summary_parts = []
+    # Card 1: Health Score Summary (Top Priority)
     if score is not None:
-        summary_parts.append(f"{t('health_score')}: {score}/100")
-    if nutrients.get("sugars") or nutrients.get("sugar"):
-        summary_parts.append(
-            f"Sugars: {nutrients.get('sugars') or nutrients.get('sugar')} g"
-        )
-    if nutrients.get("calories"):
-        summary_parts.append(f"Calories: {nutrients.get('calories')} kcal")
+        score_color = "#10B981" if score >= 70 else "#F59E0B" if score >= 50 else "#EF4444"
+        score_label = "Excellent" if score >= 70 else "Moderate" if score >= 50 else "Poor"
+        
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, {score_color}15 0%, {score_color}05 100%);
+            border-left: 4px solid {score_color};
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        ">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <h3 style="margin: 0 0 8px 0; color: #0F172A; font-size: 18px;">❤️ {t('health_score')}</h3>
+                    <p style="margin: 0; color: #64748B; font-size: 14px;">{score_label} Health Rating</p>
+                </div>
+                <div style="
+                    font-size: 48px;
+                    font-weight: 700;
+                    color: {score_color};
+                ">{score}<span style="font-size: 24px; opacity: 0.6;">/100</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Card 1: Summary
-    st.markdown(
-        card(
-            title=f"✅ {t('analysis_complete')}",
-            content=(
-                " • ".join(summary_parts)
-                if summary_parts
-                else "Analysis summary is not available."
-            ),
-        ),
-        unsafe_allow_html=True,
-    )
-
-    # Card 2: Nutrition Facts
+    # Card 2: Nutrition Facts (Compact Grid)
     rows = []
     for k, label, unit in [
         ("calories", "Calories", "kcal"),
@@ -166,30 +168,59 @@ def _render_full_analysis(result: dict):
 
     if rows:
         with st.expander(f"📊 {t('nutrition_facts')}", expanded=True):
-            # Use columns for better display
             cols = st.columns(3)
             for i, row in enumerate(rows[:6]):
                 with cols[i % 3]:
-                    st.metric(label=row["Nutrient"], value=row["Amount"])
+                    st.markdown(f"""
+                    <div style="
+                        text-align: center;
+                        padding: 16px;
+                        background: #F8FAFC;
+                        border-radius: 8px;
+                        margin-bottom: 8px;
+                    ">
+                        <div style="font-size: 13px; color: #64748B; margin-bottom: 4px;">{row['Nutrient']}</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #0F172A;">{row['Amount']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # Card 3: Why this score?
     reasons = result.get("score_reasons") or _score_breakdown(nutrients)
     if reasons:
-        with st.expander(f"❓ {t('why_score')}", expanded=True):
+        with st.expander(f"❓ {t('why_score')}", expanded=False):
             for r in reasons:
-                st.write("• " + r)
+                st.markdown(f"<div style='padding: 8px 0; border-bottom: 1px solid #E2E8F0;'>• {r}</div>", unsafe_allow_html=True)
 
     # Card 4: Warnings + Recommendations
     if warnings or recs:
-        with st.expander(f"⚠️ {t('warnings')} / {t('recommendations')}", expanded=True):
+        with st.expander(f"⚠️ {t('warnings')} & {t('recommendations')}", expanded=True):
             if warnings:
-                st.markdown(f"**{t('warnings')}:**")
+                st.markdown(f"**⚠️ {t('warnings')}:**")
                 for w in warnings:
-                    st.warning("• " + str(w))
+                    st.markdown(f"""
+                    <div style="
+                        background: #FEF3C7;
+                        border-left: 3px solid #F59E0B;
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 6px;
+                        color: #92400E;
+                    ">• {str(w)}</div>
+                    """, unsafe_allow_html=True)
+            
             if recs:
-                st.markdown(f"**{t('recommendations')}:**")
+                st.markdown(f"**💡 {t('recommendations')}:**")
                 for rr in recs:
-                    st.info("• " + str(rr))
+                    st.markdown(f"""
+                    <div style="
+                        background: #DBEAFE;
+                        border-left: 3px solid #3B82F6;
+                        padding: 12px;
+                        margin: 8px 0;
+                        border-radius: 6px;
+                        color: #1E40AF;
+                    ">• {str(rr)}</div>
+                    """, unsafe_allow_html=True)
 
 
 def _inject_camera_css() -> None:
@@ -894,30 +925,29 @@ def _render_camera_inner() -> None:
                 # Display result
                 col1, col2 = st.columns([2, 1])
                 with col1:
-                    st.markdown(f"### {result.get('product', 'Unknown Product')}")
+                    # Product title with clean styling
+                    st.markdown(f"""
+                    <div style="
+                        padding: 20px;
+                        background: white;
+                        border-radius: 12px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        margin-bottom: 16px;
+                    ">
+                        <h2 style="margin: 0 0 12px 0; color: #0F172A;">{result.get('product', 'Unknown Product')}</h2>
+                        
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">""", unsafe_allow_html=True)
 
-                    # Health score with badge
-                    score = result.get("health_score", 50)
-                    st.markdown(f"**{t('health_score')}:** ❤️ {score}/100")
+                    # Metadata badges inline
+                    render_metadata_badges(result, pre_conf)
+                    
+                    st.markdown("</div></div>", unsafe_allow_html=True)
 
-                    # Metadata badges
-                    badges_html = confidence_badge(
-                        result.get("confidence", pre_conf), t("confidence")
-                    )
-                    if result.get("data_source"):
-                        badges_html += " " + source_badge(result["data_source"])
-                    st.markdown(
-                        f'<div style="margin: 8px 0;">{badges_html}</div>',
-                        unsafe_allow_html=True,
-                    )
-
-                    # Render full analysis with cards
+                    # Render full analysis with improved cards
                     _render_full_analysis(result)
 
                     # Ingredients
-                    if result.get("ingredients"):
-                        with st.expander("📝 Ingredients"):
-                            st.write(", ".join(result.get("ingredients", [])))
+                    render_ingredients_section(result)
 
                 with col2:
                     st.image(
@@ -1310,9 +1340,9 @@ def _render_upload_fallback() -> None:
                                 nutrition_snapshot
                             )
                             result["data_source"] = nutrition_snapshot.get("source")
-                            result["nutrients"] = (
-                                nutrition_snapshot.get("raw") or nutrition_snapshot
-                            )
+                            raw = nutrition_snapshot.get("raw") if isinstance(nutrition_snapshot.get("raw"), dict) else nutrition_snapshot
+                            nutrients = raw.get("nutrients") if isinstance(raw.get("nutrients"), dict) else raw
+                            result["nutrients"] = nutrients
 
                     # Try OCR
                     ocr_text = barcode_scanner.extract_text_ocr(img_array)
