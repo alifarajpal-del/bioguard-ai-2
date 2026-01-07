@@ -120,7 +120,17 @@ def _score_breakdown(nutrients: dict) -> list[str]:
 
 def _render_full_analysis(result: dict):
     """Render comprehensive analysis with professional medical-grade cards."""
-    nutrients = result.get("nutrients") or {}
+    # Normalize nutrients to ensure we have flat dict
+    raw_nutrients = result.get("nutrients") or {}
+    if isinstance(raw_nutrients, dict) and "nutrients" in raw_nutrients:
+        nutrients = raw_nutrients["nutrients"]
+    else:
+        nutrients = raw_nutrients
+    
+    # Also check ocr_nutrition as fallback
+    if not nutrients or not any(nutrients.values()):
+        nutrients = result.get("ocr_nutrition") or {}
+    
     warnings = result.get("warnings") or []
     recs = result.get("recommendations") or []
     score = result.get("health_score")
@@ -183,13 +193,20 @@ def _render_full_analysis(result: dict):
                         <div style="font-size: 20px; font-weight: 700; color: #0F172A;">{row['Amount']}</div>
                     </div>
                     """, unsafe_allow_html=True)
+    else:
+        # Show message when nutrition data not available
+        st.info(f"📊 {t('nutrition_facts')}: Data not available. Try rescanning or upload clearer image.")
 
     # Card 3: Why this score?
     reasons = result.get("score_reasons") or _score_breakdown(nutrients)
-    if reasons:
+    if reasons and any(reasons):
         with st.expander(f"❓ {t('why_score')}", expanded=False):
             for r in reasons:
                 st.markdown(f"<div style='padding: 8px 0; border-bottom: 1px solid #E2E8F0;'>• {r}</div>", unsafe_allow_html=True)
+    elif score is not None:
+        # Show default message when no detailed reasons
+        with st.expander(f"❓ {t('why_score')}", expanded=False):
+            st.info("Score calculated based on AI analysis of visible product information.")
 
     # Card 4: Warnings + Recommendations
     if warnings or recs:
@@ -863,6 +880,9 @@ def _render_camera_inner() -> None:
 
             with st.spinner(messages["analyzing"] + "..."):
                 result = analyze_image_sync(buf.getvalue(), preferred_provider=provider)
+                
+                # Log initial result for debugging
+                logger.info(f"Initial AI analysis result keys: {list(result.keys())}")
 
                 # Check for health conflicts
                 user_id = st.session_state.get("user_id", "anonymous")
@@ -889,9 +909,11 @@ def _render_camera_inner() -> None:
                             for c in conflicts[:3]
                         ]
 
+                # Try to fetch nutrition data if not already available
                 if not st.session_state.last_nutrition_snapshot and result.get(
                     "product"
                 ):
+                    logger.info(f"Fetching nutrition data for: {result.get('product')}")
                     nutrition_client = _get_nutrition_client()
                     snapshot = nutrition_client.get_nutrition(
                         query=result.get("product"),
@@ -901,6 +923,27 @@ def _render_camera_inner() -> None:
                     )
                     if snapshot.get("source"):
                         st.session_state.last_nutrition_snapshot = snapshot
+                        logger.info(f"Nutrition snapshot obtained from: {snapshot.get('source')}")
+                    else:
+                        logger.warning("No nutrition snapshot available from API")
+                        # Try OCR as fallback
+                        try:
+                            from services.barcode_scanner import BarcodeScanner
+                            barcode_scanner = BarcodeScanner()
+                            img_array = np.array(image)
+                            ocr_text = barcode_scanner.extract_text_ocr(img_array)
+                            if ocr_text:
+                                logger.info(f"OCR extracted text: {ocr_text[:100]}...")
+                                nutrition = barcode_scanner.parse_nutrition_label(ocr_text)
+                                if any(nutrition.values()):
+                                    result["ocr_nutrition"] = nutrition
+                                    logger.info(f"OCR nutrition parsed: {nutrition}")
+                                ingredients_list = barcode_scanner.extract_ingredients_list(ocr_text)
+                                if ingredients_list:
+                                    result["ocr_ingredients"] = ingredients_list
+                                    logger.info(f"OCR ingredients extracted: {len(ingredients_list)} items")
+                        except Exception as ocr_error:
+                            logger.error(f"OCR fallback failed: {ocr_error}")
 
                 if st.session_state.last_barcode and isinstance(
                     st.session_state.last_barcode, dict
@@ -910,6 +953,14 @@ def _render_camera_inner() -> None:
                 if st.session_state.last_nutrition_snapshot:
                     snapshot = st.session_state.last_nutrition_snapshot
                     result = prepare_nutrition_result(snapshot, result)
+                    logger.info(f"Nutrition data merged into result. Keys: {list(result.keys())}")
+                else:
+                    # Add informative message when no nutrition data available
+                    if not result.get("nutrients") and not result.get("ocr_nutrition"):
+                        logger.warning("No nutrition data available from any source")
+                        result["warnings"] = result.get("warnings", []) + [
+                            "⚠️ Detailed nutrition data not available. Score based on visual analysis only."
+                        ]
 
                 # Save to history
                 save_analysis_to_history(result, user_id)

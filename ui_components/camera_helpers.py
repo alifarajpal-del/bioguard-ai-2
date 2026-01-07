@@ -129,9 +129,22 @@ def render_metadata_badges(result: Dict[str, Any], confidence: float) -> None:
 
 def render_ingredients_section(result: Dict[str, Any]) -> None:
     """Render ingredients section if available."""
-    if result.get("ingredients"):
-        with st.expander("📝 Ingredients"):
-            st.write(", ".join(result.get("ingredients", [])))
+    # Try multiple sources for ingredients
+    ingredients = (
+        result.get("ingredients") 
+        or result.get("ocr_ingredients") 
+        or result.get("parsed_ingredients")
+        or []
+    )
+    
+    if ingredients:
+        with st.expander("📝 Ingredients", expanded=True):
+            if isinstance(ingredients, list):
+                st.write(", ".join(ingredients))
+            elif isinstance(ingredients, str):
+                st.write(ingredients)
+            else:
+                st.write(str(ingredients))
 
 
 def render_alternatives_section(
