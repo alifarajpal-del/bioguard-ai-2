@@ -872,6 +872,11 @@ def _render_camera_inner() -> None:
             # Convert frame to bytes
             frame = st.session_state.pending_analysis_frame
             image = Image.fromarray(frame)
+            # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
+            if image.mode in ('RGBA', 'LA', 'P'):
+                rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+                rgb_image.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = rgb_image
             buf = BytesIO()
             image.save(buf, format="JPEG", quality=95)
 
@@ -955,8 +960,11 @@ def _render_camera_inner() -> None:
                     result = prepare_nutrition_result(snapshot, result)
                     logger.info(f"Nutrition data merged into result. Keys: {list(result.keys())}")
                 else:
-                    # Add informative message when no nutrition data available
-                    if not result.get("nutrients") and not result.get("ocr_nutrition"):
+                    # If no nutrition snapshot, try to extract from OCR
+                    if result.get("ocr_nutrition"):
+                        result["nutrients"] = result.get("ocr_nutrition")
+                        logger.info("Using OCR nutrition data")
+                    elif not result.get("nutrients"):
                         logger.warning("No nutrition data available from any source")
                         result["warnings"] = result.get("warnings", []) + [
                             "⚠️ Detailed nutrition data not available. Score based on visual analysis only."
@@ -1354,6 +1362,11 @@ def _render_upload_fallback() -> None:
             ):
                 # Convert to bytes
                 buf = BytesIO()
+                # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
+                if image.mode in ('RGBA', 'LA', 'P'):
+                    rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+                    rgb_image.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                    image = rgb_image
                 image.save(buf, format="JPEG", quality=95)
 
                 # Analyze

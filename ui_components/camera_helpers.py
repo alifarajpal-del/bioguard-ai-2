@@ -52,10 +52,23 @@ def get_score_color(score: int) -> str:
 
 def normalize_nutrition_data(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize nutrition snapshot to flat dict structure."""
+    # Check if 'raw' contains nested nutrients
     raw = snapshot.get("raw") or snapshot
     if isinstance(raw, dict) and "nutrients" in raw:
         return raw["nutrients"]
-    return raw
+    
+    # Check for direct nutrition keys in snapshot
+    if isinstance(snapshot, dict):
+        # If snapshot has direct nutrition keys, extract them
+        nutrition_dict = {}
+        for key in ["calories", "carbs", "fat", "protein", "sugar", "sodium", "sugars", "carbohydrates"]:
+            if key in snapshot:
+                nutrition_dict[key] = snapshot[key]
+        if nutrition_dict:
+            return nutrition_dict
+    
+    # Return raw if it has any data
+    return raw or {}
 
 
 def prepare_nutrition_result(
