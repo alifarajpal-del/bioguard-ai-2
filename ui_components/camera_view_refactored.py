@@ -59,7 +59,7 @@ def render_camera_view() -> None:
         st.session_state.scan_enabled = scan_enabled
 
     with col3:
-        if st.button(messages["capture"], use_container_width=True, type="primary"):
+        if st.button(messages["capture"], width="stretch", type="primary"):
             st.session_state.manual_capture = True
 
     # WebRTC configuration
@@ -86,16 +86,25 @@ def render_camera_view() -> None:
     status_placeholder = st.empty()
     _update_status(status_placeholder, st.session_state.scan_status, messages)
 
-    # WebRTC streamer with video processor
-    ctx = webrtc_streamer(
-        key="bioguard-camera",
-        mode=WebRtcMode.SENDRECV,
-        rtc_configuration=rtc_config,
-        media_stream_constraints=constraints,
-        video_processor_factory=get_video_processor_factory(),
-        desired_playing_state=True,
-        async_processing=True,
-    )
+    # WebRTC streamer with video processor - wrapped in try/except for Cloud stability
+    ctx = None
+    try:
+        ctx = webrtc_streamer(
+            key="bioguard-camera",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=rtc_config,
+            media_stream_constraints=constraints,
+            video_processor_factory=get_video_processor_factory(),
+            desired_playing_state=True,
+            async_processing=True,
+        )
+    except AttributeError as e:
+        # Handle 'NoneType' object has no attribute 'is_alive' error on Cloud
+        st.warning("📷 WebRTC unavailable. Please use the file upload option below.")
+        ctx = None
+    except Exception as e:
+        st.error(f"Camera error: {str(e)[:50]}...")
+        ctx = None
 
     # Process results if camera is active
     if ctx and ctx.state.playing and ctx.video_processor:
@@ -370,7 +379,7 @@ def _display_analysis_result(
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        st.image(image, caption=messages["captured_image"], use_container_width=True)
+        st.image(image, caption=messages["captured_image"], width="stretch")
 
     with col2:
         # Health score
@@ -433,10 +442,10 @@ def _render_upload_interface(messages: Dict[str, str]) -> None:
 
     if uploaded_file:
         image = Image.open(uploaded_file)
-        st.image(image, caption=messages["uploaded_image"], use_container_width=True)
+        st.image(image, caption=messages["uploaded_image"], width="stretch")
 
         if st.button(
-            messages["analyze_button"], type="primary", use_container_width=True
+            messages["analyze_button"], type="primary", width="stretch"
         ):
             with st.spinner(messages["analyzing"]):
                 try:

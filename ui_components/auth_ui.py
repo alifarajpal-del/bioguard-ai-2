@@ -38,7 +38,7 @@ def render_login_register():
             email = st.text_input(t("email"), key="login_email")
             password = st.text_input(t("password"), type="password", key="login_pwd")
             
-            if st.button(t("login_button"), use_container_width=True, key="login_btn"):
+            if st.button(t("login_button"), width="stretch", key="login_btn"):
                 if email and password:
                     result = login_user(email, password)
                     if result["success"]:
@@ -60,7 +60,7 @@ def render_login_register():
             reg_password = st.text_input(t("password"), type="password", key="reg_pwd")
             reg_confirm = st.text_input(t("password_confirm"), type="password", key="reg_confirm")
             
-            if st.button(t("register_button"), use_container_width=True, key="reg_btn"):
+            if st.button(t("register_button"), width="stretch", key="reg_btn"):
                 if not reg_email or not reg_password or not reg_confirm:
                     st.warning("Please fill all fields")
                 elif reg_password != reg_confirm:

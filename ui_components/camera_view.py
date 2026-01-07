@@ -1020,7 +1020,7 @@ def _render_camera_inner() -> None:
                 with col2:
                     st.image(
                         image,
-                        use_container_width=True,
+                        width="stretch",
                         caption=messages["scanned_image"],
                     )
 
@@ -1118,7 +1118,7 @@ def _render_camera_inner() -> None:
         with col_b:
             if st.button(
                 messages["manual_capture"],
-                use_container_width=True,
+                width="stretch",
                 key="manual_capture_btn",
             ):
                 if ctx.video_processor:
@@ -1298,10 +1298,10 @@ def _render_upload_fallback() -> None:
 
         if file:
             image = Image.open(file)
-            st.image(image, use_container_width=True)
+            st.image(image, width="stretch")
 
             if st.button(
-                messages.get("analyzing", "Analyze"), use_container_width=True
+                messages.get("analyzing", "Analyze"), width="stretch"
             ):
                 # Convert to bytes
                 # Ensure image is in RGB mode (JPEG doesn't support transparency)

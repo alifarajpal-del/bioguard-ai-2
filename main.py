@@ -161,7 +161,7 @@ def _render_settings_inner() -> None:
     with col2:
         st.number_input("Weight (kg)", value=user.get("weight", 70.0), key="profile_weight")
         st.number_input("Height (cm)", value=user.get("height", 170), key="profile_height")
-    if st.button("💾 Save", use_container_width=True):
+    if st.button("💾 Save", width="stretch"):
         st.success("Profile saved locally")
 
     st.divider()
@@ -178,7 +178,7 @@ def _render_settings_inner() -> None:
         })
     
     st.divider()
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button("🚪 Logout", width="stretch"):
         logout(st.session_state.user_id or "")
         st.session_state.authenticated = False
         st.session_state.user_id = None
