@@ -7,6 +7,7 @@ from ui_components.error_ui import safe_render
 from ui_components.micro_ux import skeleton_card, inject_skeleton_css
 from ui_components.ui_kit import card, badge, inject_ui_kit_css
 from utils.logging_setup import get_logger, log_user_action
+from utils.i18n import t, get_lang
 
 logger = get_logger(__name__)
 
@@ -34,7 +35,7 @@ def _render_vault_inner() -> None:
     
     log_user_action(logger, 'vault_view', {})
     
-    st.markdown("## 🗄️ المخزن الطبي")
+    st.markdown(f"## 🗄️ {t('vault_title')}")
     
     # Initialize medical history in session state
     if "medical_history" not in st.session_state:
@@ -410,10 +411,10 @@ def _upload_box(theme: dict) -> None:
 
 def _files_list(theme: dict) -> None:
     """Render documents list with modern card design"""
-    st.markdown("### 📋 مستنداتك الطبية")
+    st.markdown(f"### 📋 {t('your_documents')}")
     
     if not st.session_state.medical_history:
-        st.info("لا توجد مستندات حتى الآن. ابدأ برفع أول ملف طبي! 📤")
+        st.info(t('no_documents'))
         return
     
     # Filter by selected category if any
@@ -421,31 +422,37 @@ def _files_list(theme: dict) -> None:
     
     if selected_category:
         filtered_docs = [doc for doc in st.session_state.medical_history if doc.get("category") == selected_category]
-        st.markdown(f"**عرض فئة: {selected_category.upper()}** ({len(filtered_docs)} ملف)")
+        st.markdown(f"**{t('category')}: {selected_category.upper()}** ({len(filtered_docs)} files)")
         
-        if st.button("🔙 عرض الكل", type="secondary"):
+        if st.button(f"🔙 {t('view_all')}", type="secondary"):
             st.session_state.selected_category = None
             st.rerun()
     else:
         filtered_docs = st.session_state.medical_history
-        st.markdown(f"**{len(filtered_docs)} مستند في المخزن**")
+        st.markdown(f"**{len(filtered_docs)} documents**")
     
     # Display documents using ui_kit cards
     for idx, doc in enumerate(filtered_docs):
         col1, col2, col3 = st.columns([5, 1, 1])
         
         with col1:
-            st.markdown(card(
-                title=f"{doc['icon']} {doc['name']}",
-                content=f"{badge(doc['size'], 'secondary')} {badge(doc['date'], 'info')}"
-            ), unsafe_allow_html=True)
+            # Clean display without raw HTML showing
+            doc_title = f"{doc.get('icon', '📄')} {doc.get('name', 'Unknown')}"
+            doc_meta = f"{doc.get('size', 'N/A')} • {doc.get('date', 'N/A')}"
+            
+            st.markdown(f"""
+            <div style="padding: 12px; background: var(--card-bg, #f8f9fa); border-radius: 8px; border: 1px solid #e0e0e0;">
+                <div style="font-weight: 600; margin-bottom: 4px;">{doc_title}</div>
+                <div style="font-size: 0.85em; color: #666;">{doc_meta}</div>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
-            if st.button("👁️", key=f"view_{idx}", use_container_width=True, help="عرض"):
-                st.info(f"عرض: {doc['name']}")
+            if st.button("👁️", key=f"view_{idx}", use_container_width=True, help="View"):
+                st.info(f"Viewing: {doc.get('name', 'Unknown')}")
         
         with col3:
-            if st.button("🗑️", key=f"del_{idx}", use_container_width=True, type="secondary", help="حذف"):
+            if st.button("🗑️", key=f"del_{idx}", use_container_width=True, type="secondary", help="Delete"):
                 # Find the actual index in the original list
                 actual_idx = st.session_state.medical_history.index(doc)
                 st.session_state.medical_history.pop(actual_idx)

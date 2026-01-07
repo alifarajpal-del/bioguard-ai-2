@@ -13,6 +13,7 @@ from ui_components.error_ui import safe_render
 from ui_components.micro_ux import skeleton_card, inject_skeleton_css
 from ui_components.ui_kit import card, metric, badge, inject_ui_kit_css
 from utils.logging_setup import get_logger, log_user_action
+from utils.i18n import t, get_lang
 
 logger = get_logger(__name__)
 
@@ -32,7 +33,7 @@ def _render_dashboard_inner() -> None:
     
     log_user_action(logger, 'dashboard_view', {})
     
-    st.markdown("## 🏠 لوحة التحكم")
+    st.markdown(f"## 🏠 {t('dashboard_title')}")
     
     # Show skeleton while loading
     with st.spinner(""):
@@ -175,27 +176,27 @@ def _modern_stats_cards(theme: dict) -> None:
     stats = [
         {
             "icon": "💚",
-            "label": "Health Score",
+            "label": t('health_score'),
             "value": f"{int(avg_score)}",
-            "delta": "+4 من الأسبوع الماضي",
+            "delta": "+4 this week",
         },
         {
             "icon": "🔬",
-            "label": "Total Scans",
+            "label": t('total_scans'),
             "value": f"{total_scans}",
-            "delta": "+12 اليوم",
+            "delta": "+12 today",
         },
         {
             "icon": "⚠️",
-            "label": "Warnings",
+            "label": t('warnings'),
             "value": f"{warnings}",
-            "delta": "بحاجة للمراجعة",
+            "delta": "Review needed",
         },
         {
             "icon": "✅",
-            "label": "Safe Items",
+            "label": t('safe_items'),
             "value": f"{safe_count}",
-            "delta": f"{int(safe_count/max(total_scans, 1)*100)}% معدل الأمان" if total_scans else "0%",
+            "delta": f"{int(safe_count/max(total_scans, 1)*100)}% safe" if total_scans else "0%",
         },
     ]
     
@@ -212,7 +213,7 @@ def _modern_stats_cards(theme: dict) -> None:
 def _health_score_trend(theme: dict) -> None:
     """Display health score trend chart with modern styling."""
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.markdown("### 📈 مؤشر الصحة")
+    st.markdown(f"### 📈 {t('health_score')} Trend")
     
     dates = pd.date_range(end=datetime.now(), periods=14, freq="D")
     scores = [72 + i % 6 + (i * 0.6) for i in range(len(dates))]

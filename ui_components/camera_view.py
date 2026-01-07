@@ -37,11 +37,109 @@ from ui_components.branding import render_brand_watermark
 from ui_components.router import go_back
 from ui_components.error_ui import safe_render, show_validation_error, show_rate_limit_error
 from ui_components.micro_ux import inject_skeleton_css, step_progress, show_processing_status
-from ui_components.ui_kit import confidence_badge, source_badge, badge, inject_ui_kit_css
+from ui_components.ui_kit import confidence_badge, source_badge, badge, inject_ui_kit_css, card, metric
 from utils.validation import sanitize_barcode, sanitize_query, rate_limit_check, ValidationError
 from utils.logging_setup import get_logger, log_user_action
+from utils.i18n import t, get_lang
 
 logger = get_logger(__name__)
+
+
+def _score_breakdown(nutrients: dict) -> list[str]:
+    """Generate simple, explainable score breakdown based on nutrients."""
+    reasons = []
+    sugar = float(nutrients.get("sugars") or nutrients.get("sugar") or 0)
+    calories = float(nutrients.get("calories") or 0)
+    sodium = float(nutrients.get("sodium") or 0)
+
+    # Simple, explainable rules (tunable later)
+    if sugar >= 15:
+        reasons.append("High sugar (≥ 15g) reduces score.")
+    elif sugar >= 8:
+        reasons.append("Moderate sugar affects score.")
+    else:
+        reasons.append("Low sugar supports a better score.")
+
+    if calories >= 250:
+        reasons.append("High calories per serving lowers score.")
+    elif calories >= 120:
+        reasons.append("Moderate calories impact score.")
+    else:
+        reasons.append("Lower calories support a better score.")
+
+    if sodium >= 400:
+        reasons.append("High sodium lowers score.")
+    elif sodium >= 200:
+        reasons.append("Moderate sodium impacts score.")
+    elif sodium > 0:
+        reasons.append("Low sodium supports score.")
+
+    return reasons
+
+
+def _render_full_analysis(result: dict):
+    """Render comprehensive analysis with unified cards."""
+    # Expect result schema; fail gracefully
+    nutrients = result.get("nutrients") or {}
+    warnings = result.get("warnings") or []
+    recs = result.get("recommendations") or []
+    score = result.get("health_score")
+
+    # Summary
+    summary_parts = []
+    if score is not None:
+        summary_parts.append(f"{t('health_score')}: {score}/100")
+    if nutrients.get("sugars") or nutrients.get("sugar"):
+        summary_parts.append(f"Sugars: {nutrients.get('sugars') or nutrients.get('sugar')} g")
+    if nutrients.get("calories"):
+        summary_parts.append(f"Calories: {nutrients.get('calories')} kcal")
+
+    # Card 1: Summary
+    st.markdown(card(
+        title=f"✅ {t('analysis_complete')}",
+        content=" • ".join(summary_parts) if summary_parts else "Analysis summary is not available."
+    ), unsafe_allow_html=True)
+
+    # Card 2: Nutrition Facts
+    rows = []
+    for k, label, unit in [
+        ("calories", "Calories", "kcal"),
+        ("carbohydrates", "Carbs", "g"),
+        ("fat", "Fat", "g"),
+        ("protein", "Protein", "g"),
+        ("sugars", "Sugars", "g"),
+        ("sodium", "Sodium", "mg"),
+    ]:
+        v = nutrients.get(k)
+        if v is not None and v != "":
+            rows.append({"Nutrient": label, "Amount": f"{v} {unit}"})
+
+    if rows:
+        with st.expander(f"📊 {t('nutrition_facts')}", expanded=True):
+            # Use columns for better display
+            cols = st.columns(3)
+            for i, row in enumerate(rows[:6]):
+                with cols[i % 3]:
+                    st.metric(label=row["Nutrient"], value=row["Amount"])
+
+    # Card 3: Why this score?
+    reasons = result.get("score_reasons") or _score_breakdown(nutrients)
+    if reasons:
+        with st.expander(f"❓ {t('why_score')}", expanded=True):
+            for r in reasons:
+                st.write("• " + r)
+
+    # Card 4: Warnings + Recommendations
+    if warnings or recs:
+        with st.expander(f"⚠️ {t('warnings')} / {t('recommendations')}", expanded=True):
+            if warnings:
+                st.markdown(f"**{t('warnings')}:**")
+                for w in warnings:
+                    st.warning("• " + str(w))
+            if recs:
+                st.markdown(f"**{t('recommendations')}:**")
+                for rr in recs:
+                    st.info("• " + str(rr))
 
 
 def _inject_camera_css() -> None:
@@ -744,21 +842,15 @@ def _render_camera_inner() -> None:
                 # Show step progress complete
                 step_progress(["كشف", "تحليل", "نتائج"], active_index=2)
                 
-                # Show results using ui_kit
-                st.markdown(card(
-                    title=f"✅ {messages['analysis_complete']}",
-                    content=""
-                ), unsafe_allow_html=True)
-                
                 # Display result
                 col1, col2 = st.columns([2, 1])
                 with col1:
-                    st.markdown(f"**{result.get('product', 'Unknown Product')}**")
+                    st.markdown(f"### {result.get('product', 'Unknown Product')}")
                     
                     # Health score with ui_kit metric
                     score = result.get('health_score', 50)
                     st.markdown(metric(
-                        label=messages.get('health_score', 'Health Score'),
+                        label=t('health_score'),
                         value=f"{score}/100",
                         icon="❤️"
                     ), unsafe_allow_html=True)
@@ -766,40 +858,19 @@ def _render_camera_inner() -> None:
                     # Metadata badges
                     badges_html = confidence_badge(
                         result.get('confidence', pre_conf),
-                        messages.get('confidence', 'Confidence')
+                        t('confidence')
                     )
                     if result.get('data_source'):
                         badges_html += " " + source_badge(result['data_source'])
                     st.markdown(f'<div style="margin: 8px 0;">{badges_html}</div>', unsafe_allow_html=True)
                     
-                    # Warnings
-                    if result.get('warnings'):
-                        st.warning("⚠️ " + " • ".join(result.get('warnings', [])[:3]))
+                    # Render full analysis with cards
+                    _render_full_analysis(result)
                     
                     # Ingredients
                     if result.get('ingredients'):
-                        with st.expander(messages['ingredients']):
+                        with st.expander("📝 Ingredients"):
                             st.write(", ".join(result.get('ingredients', [])))
-
-                    nutrients = result.get('nutrients') or {}
-                    if nutrients:
-                        with st.expander(messages.get('nutrition_details', 'Nutrition breakdown')):
-                            # Use native columns for macro breakdown
-                            cols = st.columns(3)
-                            macros = [
-                                ('🔥', 'Calories', nutrients.get('calories')),
-                                ('🍞', 'Carbs', nutrients.get('carbohydrates') or nutrients.get('carbs')),
-                                ('🥑', 'Fat', nutrients.get('fat')),
-                                ('🍗', 'Protein', nutrients.get('protein')),
-                                ('🍬', 'Sugar', nutrients.get('sugars') or nutrients.get('sugar')),
-                            ]
-                            for i, (icon, label, value) in enumerate(macros[:3]):
-                                if value:
-                                    with cols[i]:
-                                        st.metric(label=f"{icon} {label}", value=value)
-                            
-                            if result.get('data_source'):
-                                st.caption(f"Source: {result['data_source']}")
                 
                 with col2:
                     st.image(image, use_container_width=True, caption=messages['scanned_image'])

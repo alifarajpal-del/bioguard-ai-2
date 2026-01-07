@@ -42,6 +42,7 @@ from ui_components.onboarding import render_onboarding
 from ui_components.router import ensure_nav_state, go_to, go_back, next_page, prev_page
 from ui_components.error_ui import safe_render
 from services.auth import create_or_login_user, logout
+from utils.i18n import get_lang, set_lang, t
 
 # Camera view - choose version
 try:
@@ -79,8 +80,8 @@ def init_session_state() -> None:
         st.session_state.ai_provider = "gemini"
     if "use_refactored_camera" not in st.session_state:
         st.session_state.use_refactored_camera = REFACTORED_CAMERA_AVAILABLE
-    if "language" not in st.session_state:
-        st.session_state.language = "en"  # Default language is English
+    # Initialize language with default English
+    get_lang()  # This will set to "en" if not already set
     ensure_nav_state()
     if "onboarding_done" not in st.session_state:
         st.session_state.onboarding_done = False
@@ -123,28 +124,24 @@ def render_settings_page() -> None:
 
 
 def _render_settings_inner() -> None:
-    from utils.translations import get_text
-    from config.settings import SUPPORTED_LANGUAGES
-    
-    lang = st.session_state.get("language", "en")
-    
     # Back button
-    if st.button(f"⬅️ {get_text('back', lang)}", key="settings_back_home"):
+    if st.button(f"⬅️ {t('go_home')}", key="settings_back_home"):
         go_back()
     
-    st.markdown(f"## ⚙️ {get_text('settings', lang)}")
+    st.markdown(f"## ⚙️ {t('settings_title')}")
     
     # Language selector
-    st.markdown(f"### 🌍 {get_text('language', lang)}")
-    selected_lang = st.selectbox(
-        get_text("select_language", lang),
-        options=list(SUPPORTED_LANGUAGES.keys()),
-        index=list(SUPPORTED_LANGUAGES.keys()).index(st.session_state.language),
-        format_func=lambda x: SUPPORTED_LANGUAGES[x],
+    st.markdown("### 🌍 Language / اللغة")
+    current_lang = get_lang()
+    lang_choice = st.selectbox(
+        "Choose your language",
+        options=["English", "العربية"],
+        index=0 if current_lang == "en" else 1,
         key="language_selector"
     )
-    if selected_lang != st.session_state.language:
-        st.session_state.language = selected_lang
+    new_lang = "en" if lang_choice == "English" else "ar"
+    if new_lang != current_lang:
+        set_lang(new_lang)
         st.rerun()
     st.divider()
     
