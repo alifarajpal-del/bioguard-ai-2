@@ -9,18 +9,17 @@ def render_login_register():
     # Language selector
     cols = st.columns([1, 10, 1])
     with cols[2]:
-        lang = get_lang()
+        current_lang = get_lang()
         new_lang = st.selectbox(
             "Language / اللغة",
             ["English", "العربية"],
-            index=0 if lang == "en" else 1,
+            index=0 if current_lang == "en" else 1,
             key="lang_selector"
         )
-        if new_lang == "العربية":
-            set_lang("ar")
-            st.rerun()
-        elif new_lang == "English":
-            set_lang("en")
+        # Only rerun if language actually changed
+        selected_lang = "ar" if new_lang == "العربية" else "en"
+        if selected_lang != current_lang:
+            set_lang(selected_lang)
             st.rerun()
     
     # Centered login/register form
