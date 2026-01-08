@@ -2,6 +2,7 @@
 import streamlit as st
 from utils.i18n import get_lang, set_lang, t
 from services.auth import login_user, register_user
+from ui_components.branding import load_logo_base64
 
 
 def render_login_register():
@@ -24,6 +25,26 @@ def render_login_register():
     
     # Centered login/register form
     col1, col2, col3 = st.columns([1, 2, 1])
+    
+    # Show logo
+    with col2:
+        logo_b64 = load_logo_base64()
+        if logo_b64:
+            st.markdown(
+                f'''
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="data:image/png;base64,{logo_b64}" 
+                         style="width: 120px; height: 120px; border-radius: 20px; 
+                                box-shadow: 0 10px 30px rgba(0, 188, 212, 0.3);" />
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div style="text-align: center; font-size: 80px; margin-bottom: 20px;">🧬</div>',
+                unsafe_allow_html=True
+            )
     
     with col2:
         st.markdown("### " + t("login_title"))
